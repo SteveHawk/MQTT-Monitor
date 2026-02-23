@@ -7,6 +7,8 @@ requires-python = ">=3.14"
 dependencies = [
     "meshtastic>=2.7.7",
     "paho-mqtt>=2.1.0",
+    "pydantic-settings>=2.13.1",
+    "python-fasthtml>=0.12.47",
 ]
 
 [dependency-groups]
@@ -14,3 +16,10 @@ dev = [
     "mypy>=1.19.1",
     "ruff>=0.15.2",
 ]
+
+[tool.mypy]
+strict = true
+
+[[tool.mypy.overrides]]
+module = ["fasthtml.*"]
+ignore_missing_imports = true
