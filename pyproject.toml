@@ -1,0 +1,16 @@
+[project]
+name = "mqtt-monitor"
+version = "0.1.0"
+description = "A Meshtastic MQTT message monitor."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "meshtastic>=2.7.7",
+    "paho-mqtt>=2.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "ruff>=0.15.2",
+]
