@@ -1,0 +1,9 @@
+**/.git/
+**/.idea/
+**/.vscode/
+**/.venv/
+**/.mypy_cache/
+**/__pycache__/
+**/.DS_Store/
+**/*.md
+**/Dockerfile*
