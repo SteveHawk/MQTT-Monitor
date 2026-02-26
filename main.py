@@ -1,6 +1,21 @@
-from fasthtml.common import FT, A, Body, Div, FastHTML, Head, Html, Img, Title, serve
+import contextlib
+from typing import AsyncGenerator
 
-app = FastHTML()
+from fasthtml.common import FT, A, Body, Div, FastHTML, Head, Html, Img, Title, serve
+from starlette.applications import Starlette
+
+from mqtt_monitor import MQTTMonitor
+
+
+@contextlib.asynccontextmanager
+async def mqttc_lifespan(app: Starlette) -> AsyncGenerator[None, None]:
+    print("Run at startup!")
+    with MQTTMonitor():
+        yield
+    print("Run on shutdown!")
+
+
+app = FastHTML(lifespan=mqttc_lifespan)
 
 
 @app.get("/")  # type: ignore
