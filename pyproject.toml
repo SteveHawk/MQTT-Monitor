@@ -5,6 +5,8 @@ description = "A Meshtastic MQTT message monitor."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "cryptography>=46.0.5",
+    "loguru>=0.7.3",
     "meshtastic>=2.7.7",
     "paho-mqtt>=2.1.0",
     "pydantic-settings>=2.13.1",
@@ -21,7 +23,7 @@ dev = [
 strict = true
 
 [[tool.mypy.overrides]]
-module = ["fasthtml.*"]
+module = ["fasthtml.*", "meshtastic.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
