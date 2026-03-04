@@ -1,4 +1,5 @@
 import base64
+from collections import deque
 from typing import Any
 
 import paho.mqtt.client as mqtt
@@ -6,6 +7,40 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from loguru import logger
 from meshtastic.protobuf import mesh_pb2, mqtt_pb2, portnums_pb2, telemetry_pb2
+
+type Payload = (
+    str
+    | mesh_pb2.User
+    | mesh_pb2.Position
+    | mesh_pb2.RouteDiscovery
+    | telemetry_pb2.Telemetry
+)
+
+
+class Message:
+    def __init__(self, id: int, packet: mesh_pb2.MeshPacket, payload: Payload) -> None:
+        self.id = id
+        self.packet = packet
+        self.payload = payload
+
+
+class RingBuffer:
+    def __init__(self, max_len: int = 128, max_id: int = 0) -> None:
+        self.deque = deque[Message](maxlen=max_len)
+        self.max_id: int = max_id
+
+    def append(self, message: Message) -> None:
+        self.deque.append(message)
+        self.max_id += 1
+
+    def new_id(self) -> int:
+        return self.max_id + 1
+
+    def fetch_all(self) -> list[Message]:
+        return list(self.deque)
+
+    def fetch_new(self, current_id: int) -> list[Message]:
+        return list(self.deque)[max(0, current_id - self.max_id) :]
 
 
 class MQTTMonitor:
@@ -16,6 +51,8 @@ class MQTTMonitor:
 
         self.mqttc.connect_async("mqtt.mess.host", 1883, 60)
         self.mqttc.username_pw_set("meshdev", "large4cats")
+
+        self.ring_buffer = RingBuffer()
 
     def loop_forever(self) -> None:
         # self.mqttc.loop_forever()  # doesn't gracefully handle keyboard interrupt
@@ -51,8 +88,9 @@ class MQTTMonitor:
         # About topic name: https://meshtastic.org/docs/software/integrations/mqtt/
         client.subscribe("msh/CN/2/e/LongFast/#")
 
-    @staticmethod
-    def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
+    def on_message(
+        self, client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage
+    ) -> None:
         """The callback for when a PUBLISH message is received from the server."""
         try:
             service_envelope = mqtt_pb2.ServiceEnvelope()
@@ -60,16 +98,15 @@ class MQTTMonitor:
             packet = service_envelope.packet
 
             if packet.HasField("encrypted") and not packet.HasField("decoded"):
-                MQTTMonitor.decode_encrypted(packet, "1PG7OiApB1nwvP+rz05pAQ==")
-            payload = MQTTMonitor.decode_payload(packet)
+                self.decode_encrypted(packet, "1PG7OiApB1nwvP+rz05pAQ==")
+            payload = self.decode_payload(packet)
 
             logger.info(f"{msg.topic}\n{packet}\npayload:\n{payload}")
 
         except Exception:
             logger.exception(f"Packet parse error: {msg.payload!r}")
 
-    @staticmethod
-    def decode_encrypted(packet: mesh_pb2.MeshPacket, key: str) -> None:
+    def decode_encrypted(self, packet: mesh_pb2.MeshPacket, key: str) -> None:
         """Decrypt an encrypted meshtastic message."""
         # Convert key to bytes
         key_bytes = base64.b64decode(key.encode("ascii"))
@@ -92,17 +129,7 @@ class MQTTMonitor:
         data.ParseFromString(decrypted_bytes)
         packet.decoded.CopyFrom(data)
 
-    @staticmethod
-    def decode_payload(
-        packet: mesh_pb2.MeshPacket,
-    ) -> (
-        str
-        | mesh_pb2.User
-        | mesh_pb2.Position
-        | mesh_pb2.RouteDiscovery
-        | telemetry_pb2.Telemetry
-        | None
-    ):
+    def decode_payload(self, packet: mesh_pb2.MeshPacket) -> Payload | None:
         """Decode encoded message payload."""
         payload = packet.decoded.payload
         portnum = packet.decoded.portnum
@@ -112,7 +139,10 @@ class MQTTMonitor:
 
         match portnum:
             case portnums_pb2.TEXT_MESSAGE_APP:
-                return payload.decode("utf-8")
+                _payload = payload.decode("utf-8")
+                _message = Message(self.ring_buffer.new_id(), packet, _payload)
+                self.ring_buffer.append(_message)
+                return _payload
 
             case portnums_pb2.NODEINFO_APP:
                 user = mesh_pb2.User()
