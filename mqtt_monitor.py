@@ -2,6 +2,7 @@ import base64
 from collections import deque
 from typing import Any
 
+import google.protobuf.message
 import paho.mqtt.client as mqtt
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -13,15 +14,37 @@ type Payload = (
     | mesh_pb2.User
     | mesh_pb2.Position
     | mesh_pb2.RouteDiscovery
+    | mesh_pb2.NeighborInfo
     | telemetry_pb2.Telemetry
+    | None
 )
 
 
 class Message:
     def __init__(self, id: int, packet: mesh_pb2.MeshPacket, payload: Payload) -> None:
         self.id = id
-        self.packet = packet
-        self.payload = payload
+        self.message = self.to_dict(packet, payload)
+
+    def __str__(self) -> str:
+        return str(self.message)
+
+    def to_dict(self, packet: mesh_pb2.MeshPacket, payload: Payload) -> dict[str, Any]:
+        packet_dict = self._to_dict(packet)
+        if payload:
+            packet_dict["decoded"]["payload"] = (
+                payload if isinstance(payload, str) else self._to_dict(payload)
+            )
+        return packet_dict
+
+    def _to_dict(self, message: google.protobuf.message.Message) -> dict[str, Any]:
+        result = dict[str, Any]()
+        for desc, val in message.ListFields():
+            if enum_type := desc.enum_type:
+                val = enum_type.values_by_number[val].name
+            result[desc.name] = val
+            if isinstance(val, google.protobuf.message.Message):
+                result[desc.name] = self._to_dict(val)
+        return result
 
 
 class RingBuffer:
@@ -93,20 +116,27 @@ class MQTTMonitor:
     ) -> None:
         """The callback for when a PUBLISH message is received from the server."""
         try:
+            # Get message
             service_envelope = mqtt_pb2.ServiceEnvelope()
             service_envelope.ParseFromString(msg.payload)
             packet = service_envelope.packet
 
+            # Decrypt and decode
             if packet.HasField("encrypted") and not packet.HasField("decoded"):
                 self.decode_encrypted(packet, "1PG7OiApB1nwvP+rz05pAQ==")
             payload = self.decode_payload(packet)
 
-            logger.info(f"{msg.topic}\n{packet}\npayload:\n{payload}")
+            # Pack into ring buffer
+            message = Message(self.ring_buffer.new_id(), packet, payload)
+            self.ring_buffer.append(message)
+
+            logger.info(f"{msg.topic}: {message}")
 
         except Exception:
             logger.exception(f"Packet parse error: {msg.payload!r}")
 
-    def decode_encrypted(self, packet: mesh_pb2.MeshPacket, key: str) -> None:
+    @staticmethod
+    def decode_encrypted(packet: mesh_pb2.MeshPacket, key: str) -> None:
         """Decrypt an encrypted meshtastic message."""
         # Convert key to bytes
         key_bytes = base64.b64decode(key.encode("ascii"))
@@ -129,7 +159,8 @@ class MQTTMonitor:
         data.ParseFromString(decrypted_bytes)
         packet.decoded.CopyFrom(data)
 
-    def decode_payload(self, packet: mesh_pb2.MeshPacket) -> Payload | None:
+    @staticmethod
+    def decode_payload(packet: mesh_pb2.MeshPacket) -> Payload:
         """Decode encoded message payload."""
         payload = packet.decoded.payload
         portnum = packet.decoded.portnum
@@ -139,10 +170,7 @@ class MQTTMonitor:
 
         match portnum:
             case portnums_pb2.TEXT_MESSAGE_APP:
-                _payload = payload.decode("utf-8")
-                _message = Message(self.ring_buffer.new_id(), packet, _payload)
-                self.ring_buffer.append(_message)
-                return _payload
+                return payload.decode("utf-8")
 
             case portnums_pb2.NODEINFO_APP:
                 user = mesh_pb2.User()
@@ -163,6 +191,11 @@ class MQTTMonitor:
                 route_discovery = mesh_pb2.RouteDiscovery()
                 route_discovery.ParseFromString(payload)
                 return route_discovery
+
+            case portnums_pb2.NEIGHBORINFO_APP:
+                neighbor_info = mesh_pb2.NeighborInfo()
+                neighbor_info.ParseFromString(payload)
+                return neighbor_info
 
             case _:
                 portnum_name = portnums_pb2.PortNum.Name(portnum)

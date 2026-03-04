@@ -440,6 +440,7 @@ dependencies = [
 dev = [
     { name = "mypy" },
     { name = "ruff" },
+    { name = "types-protobuf" },
 ]
 
 [package.metadata]
@@ -456,6 +457,7 @@ requires-dist = [
 dev = [
     { name = "mypy", specifier = ">=1.19.1" },
     { name = "ruff", specifier = ">=0.15.2" },
+    { name = "types-protobuf", specifier = ">=6.32.1.20260221" },
 ]
 
 [[package]]
@@ -839,6 +841,15 @@ source = { registry = "https://mirror.sjtu.edu.cn/pypi/web/simple" }
 sdist = { url = "https://mirror.sjtu.edu.cn/pypi-packages/ec/fe/802052aecb21e3797b8f7902564ab6ea0d60ff8ca23952079064155d1ae1/tabulate-0.9.0.tar.gz", hash = "sha256:0095b12bf5966de529c0feb1fa08671671b3368eec77d7ef7ab114be2c068b3c" }
 wheels = [
     { url = "https://mirror.sjtu.edu.cn/pypi-packages/40/44/4a5f08c96eb108af5cb50b41f76142f0afa346dfa99d5296fe7202a11854/tabulate-0.9.0-py3-none-any.whl", hash = "sha256:024ca478df22e9340661486f85298cff5f6dcdba14f3813e8830015b9ed1948f" },
+]
+
+[[package]]
+name = "types-protobuf"
+version = "6.32.1.20260221"
+source = { registry = "https://mirror.sjtu.edu.cn/pypi/web/simple" }
+sdist = { url = "https://mirror.sjtu.edu.cn/pypi-packages/5f/e2/9aa4a3b2469508bd7b4e2ae11cbedaf419222a09a1b94daffcd5efca4023/types_protobuf-6.32.1.20260221.tar.gz", hash = "sha256:6d5fb060a616bfb076cbb61b4b3c3969f5fc8bec5810f9a2f7e648ee5cbcbf6e" }
+wheels = [
+    { url = "https://mirror.sjtu.edu.cn/pypi-packages/2e/e8/1fd38926f9cf031188fbc5a96694203ea6f24b0e34bd64a225ec6f6291ba/types_protobuf-6.32.1.20260221-py3-none-any.whl", hash = "sha256:da7cdd947975964a93c30bfbcc2c6841ee646b318d3816b033adc2c4eb6448e4" },
 ]
 
 [[package]]

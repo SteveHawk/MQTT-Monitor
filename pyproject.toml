@@ -17,6 +17,7 @@ dependencies = [
 dev = [
     "mypy>=1.19.1",
     "ruff>=0.15.2",
+    "types-protobuf>=6.32.1.20260221",
 ]
 
 [tool.mypy]
