@@ -1,5 +1,6 @@
 import base64
 from collections import deque
+from threading import Condition
 from typing import Annotated, Any
 
 import google.protobuf.message
@@ -67,10 +68,13 @@ class RingBuffer:
     def __init__(self, max_len: int = 128, max_id: int = 0) -> None:
         self.deque = deque[Message](maxlen=max_len)
         self.max_id: int = max_id
+        self.condition = Condition()
 
     def append(self, message: Message) -> None:
-        self.deque.append(message)
-        self.max_id += 1
+        with self.condition:
+            self.deque.append(message)
+            self.max_id += 1
+            self.condition.notify_all()
 
     def new_id(self) -> int:
         return self.max_id + 1
@@ -79,7 +83,12 @@ class RingBuffer:
         return list(self.deque)
 
     def fetch_new(self, current_id: int) -> list[Message]:
-        return list(self.deque)[max(0, current_id - self.max_id) :]
+        # return list(self.deque)[max(0, current_id - self.max_id) :]
+        return [self.deque[-1]]
+
+    def wait(self) -> None:
+        with self.condition:
+            self.condition.wait()
 
 
 class MQTTMonitor:

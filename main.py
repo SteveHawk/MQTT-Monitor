@@ -1,38 +1,60 @@
+import asyncio
 import contextlib
 from typing import AsyncGenerator
 
-from fasthtml.common import FT, A, Body, Div, FastHTML, Head, Html, Img, Title, serve
+import fasthtml.common as ft
+from fasthtml.common import Article, Div, Script, Titled
 from starlette.applications import Starlette
+from starlette.responses import StreamingResponse
 
 from mqtt_monitor import MQTTMonitor
+
+mqtt_monitor = MQTTMonitor()
 
 
 @contextlib.asynccontextmanager
 async def mqttc_lifespan(app: Starlette) -> AsyncGenerator[None, None]:
     print("Run at startup!")
-    with MQTTMonitor():
+    with mqtt_monitor:
         yield
     print("Run on shutdown!")
 
 
-app = FastHTML(lifespan=mqttc_lifespan)
+app, rt = ft.fast_app(
+    lifespan=mqttc_lifespan,
+    hdrs=(Script(src="https://unpkg.com/htmx-ext-sse@2.2.1/sse.js"),),
+)
 
 
-@app.get("/")  # type: ignore
-def home() -> FT:
-    page = Html(
-        Head(Title("Some page")),
-        Body(
-            Div(
-                "Some text, ",
-                A("A link", href="https://example.com"),
-                Img(src="https://placehold.co/200"),
-                cls="myclass",
-            )
+@app.get("/")
+def home() -> ft.FT:
+    page = Titled(
+        "Meshtastic MQTT Monitor",
+        *[Article(str(message)) for message in mqtt_monitor.ring_buffer.fetch_all()],
+        Div(
+            hx_ext="sse",
+            sse_connect="/new-message",
+            hx_swap="beforeend show:bottom",
+            sse_swap="message",
         ),
     )
     return page
 
 
+@app.get("/new-message")
+async def new_message() -> StreamingResponse:
+    async def get_message() -> AsyncGenerator[str, None]:
+        shutdown_event = ft.signal_shutdown()
+        current_id = mqtt_monitor.ring_buffer.max_id
+
+        while not shutdown_event.is_set():  # TODO: handle shutdown event
+            await asyncio.to_thread(mqtt_monitor.ring_buffer.wait)
+            for message in mqtt_monitor.ring_buffer.fetch_new(current_id):
+                yield ft.sse_message(Article(str(message)))
+                current_id = message.id
+
+    return StreamingResponse(get_message(), media_type="text/event-stream")
+
+
 if __name__ == "__main__":
-    serve()
+    ft.serve()
