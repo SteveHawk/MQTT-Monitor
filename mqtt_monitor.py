@@ -1,6 +1,6 @@
 import base64
 from collections import deque
-from typing import Any
+from typing import Annotated, Any
 
 import google.protobuf.message
 import paho.mqtt.client as mqtt
@@ -8,6 +8,22 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from loguru import logger
 from meshtastic.protobuf import mesh_pb2, mqtt_pb2, portnums_pb2, telemetry_pb2
+from pydantic import AfterValidator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    address: str = "mqtt.mess.host"
+    username: str = "meshdev"
+    password: str = "large4cats"
+    root_topic: str = "msh/CN"
+    channel: str = "LongFast"
+    key: Annotated[
+        str, AfterValidator(lambda k: "1PG7OiApB1nwvP+rz05pAQ==" if k == "AQ==" else k)
+    ] = "AQ=="
+
+    model_config = SettingsConfigDict(env_prefix="mqtt_monitor_")
+
 
 type Payload = (
     str
@@ -68,12 +84,14 @@ class RingBuffer:
 
 class MQTTMonitor:
     def __init__(self) -> None:
-        self.mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        settings = Settings()
+
+        self.mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, userdata=settings)
         self.mqttc.on_connect = self.on_connect
         self.mqttc.on_message = self.on_message
 
-        self.mqttc.connect_async("mqtt.mess.host", 1883, 60)
-        self.mqttc.username_pw_set("meshdev", "large4cats")
+        self.mqttc.connect_async(settings.address, 1883, 60)
+        self.mqttc.username_pw_set(settings.username, settings.password)
 
         self.ring_buffer = RingBuffer()
 
@@ -95,7 +113,7 @@ class MQTTMonitor:
     @staticmethod
     def on_connect(
         client: mqtt.Client,
-        userdata: Any,
+        userdata: Settings,
         flags: mqtt.ConnectFlags,
         reason_code: mqtt.ReasonCode,
         properties: mqtt.Properties | None,
@@ -109,10 +127,10 @@ class MQTTMonitor:
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
         # About topic name: https://meshtastic.org/docs/software/integrations/mqtt/
-        client.subscribe("msh/CN/2/e/LongFast/#")
+        client.subscribe(f"{userdata.root_topic}/2/e/{userdata.channel}/#")
 
     def on_message(
-        self, client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage
+        self, client: mqtt.Client, userdata: Settings, msg: mqtt.MQTTMessage
     ) -> None:
         """The callback for when a PUBLISH message is received from the server."""
         try:
@@ -123,7 +141,7 @@ class MQTTMonitor:
 
             # Decrypt and decode
             if packet.HasField("encrypted") and not packet.HasField("decoded"):
-                self.decode_encrypted(packet, "1PG7OiApB1nwvP+rz05pAQ==")
+                self.decode_encrypted(packet, userdata.key)
             payload = self.decode_payload(packet)
 
             # Pack into ring buffer
