@@ -82,9 +82,11 @@ class RingBuffer:
     def fetch_all(self) -> list[Message]:
         return list(self.deque)
 
+    def fetch_latest(self) -> Message:
+        return self.deque[-1]
+
     def fetch_new(self, current_id: int) -> list[Message]:
-        # return list(self.deque)[max(0, current_id - self.max_id) :]
-        return [self.deque[-1]]
+        return list(self.deque)[min(0, current_id - self.max_id) :]
 
     def wait(self) -> None:
         with self.condition:

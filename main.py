@@ -4,6 +4,7 @@ from typing import AsyncGenerator
 
 import fasthtml.common as ft
 from fasthtml.common import Article, Div, Script, Titled
+from loguru import logger
 from starlette.applications import Starlette
 from starlette.responses import StreamingResponse
 
@@ -14,10 +15,8 @@ mqtt_monitor = MQTTMonitor()
 
 @contextlib.asynccontextmanager
 async def mqttc_lifespan(app: Starlette) -> AsyncGenerator[None, None]:
-    print("Run at startup!")
     with mqtt_monitor:
         yield
-    print("Run on shutdown!")
 
 
 app, rt = ft.fast_app(
@@ -28,17 +27,19 @@ app, rt = ft.fast_app(
 
 @app.get("/")
 def home() -> ft.FT:
-    page = Titled(
+    return Titled(
         "Meshtastic MQTT Monitor",
-        *[Article(str(message)) for message in mqtt_monitor.ring_buffer.fetch_all()],
         Div(
             hx_ext="sse",
             sse_connect="/new-message",
             hx_swap="beforeend show:bottom",
             sse_swap="message",
+            *[
+                Article(str(message))
+                for message in mqtt_monitor.ring_buffer.fetch_all()
+            ],
         ),
     )
-    return page
 
 
 @app.get("/new-message")
@@ -50,6 +51,7 @@ async def new_message() -> StreamingResponse:
         while not shutdown_event.is_set():  # TODO: handle shutdown event
             await asyncio.to_thread(mqtt_monitor.ring_buffer.wait)
             for message in mqtt_monitor.ring_buffer.fetch_new(current_id):
+                logger.info(f"New message sent: {message.id=}, {current_id=}")
                 yield ft.sse_message(Article(str(message)))
                 current_id = message.id
 
