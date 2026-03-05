@@ -42,6 +42,7 @@ NodeDB: dict[int, dict[str, str]] = {
 
 
 def node_num_to_nodedb_entry(node_num: int) -> dict[str, str]:
+    """Convert node_num into a NodeDB entry."""
     node_id = f"!{hex(node_num)[2:]}"
     return {
         "id": node_id,
@@ -61,6 +62,7 @@ class Message:
         return str(self.message)
 
     def to_dict(self, packet: mesh_pb2.MeshPacket, payload: Payload) -> dict[str, Any]:
+        """Convert packet and payload to dictionary."""
         packet_dict = self._to_dict(packet)
         if payload:
             packet_dict["decoded"]["payload"] = (
@@ -69,9 +71,10 @@ class Message:
         return packet_dict
 
     def _to_dict(self, message: google.protobuf.message.Message) -> dict[str, Any]:
+        """Convert google.protobuf.message.Message to dictionary."""
         result = dict[str, Any]()
         for desc, val in message.ListFields():
-            if enum_type := desc.enum_type:
+            if enum_type := desc.enum_type:  # Use enum name instead of value
                 val = enum_type.values_by_number[val].name
             result[desc.name] = val
             if isinstance(val, google.protobuf.message.Message):
@@ -79,6 +82,7 @@ class Message:
         return result
 
     def filter(self, packet: mesh_pb2.MeshPacket) -> tuple[bool, bool]:
+        """Filter packets, load NodeDB, determine which packets to display and how to display."""
         if packet.decoded.portnum == portnums_pb2.NODEINFO_APP:
             NodeDB[self.message["from"]] = {
                 "id": self.payload.get("id"),
@@ -103,24 +107,30 @@ class RingBuffer:
         self.condition = Condition()
 
     def append(self, message: Message) -> None:
+        """Append a new messsage."""
         with self.condition:
             self.deque.append(message)
             self.max_id += 1
             self.condition.notify_all()
 
-    def new_id(self) -> int:
+    def _new_id(self) -> int:
+        """Get a new id for Message."""
         return self.max_id + 1
 
     def fetch_all(self) -> list[Message]:
+        """Fetch all messages in queue."""
         return list(self.deque)
 
     def fetch_latest(self) -> Message:
+        """Fetch the latest message."""
         return self.deque[-1]
 
     def fetch_new(self, current_id: int) -> list[Message]:
+        """Fetch missed new messages later than current_id."""
         return list(self.deque)[min(0, current_id - self.max_id) :]
 
     def wait(self, timeout: int | float | None = None) -> bool:
+        """Wait for new message."""
         with self.condition:
             return self.condition.wait(timeout)
 
@@ -139,6 +149,7 @@ class MQTTMonitor:
         self.ring_buffer = RingBuffer()
 
     def loop_forever(self) -> None:
+        """Start MQTT server, blocking."""
         # self.mqttc.loop_forever()  # doesn't gracefully handle keyboard interrupt
         with self:
             try:
@@ -189,7 +200,7 @@ class MQTTMonitor:
             payload = self.decode_payload(packet)
 
             # Pack into ring buffer
-            message = Message(self.ring_buffer.new_id(), packet, payload)
+            message = Message(self.ring_buffer._new_id(), packet, payload)
             self.ring_buffer.append(message)
 
             logger.info(f"{msg.topic}: [{message.id}] {message}")
