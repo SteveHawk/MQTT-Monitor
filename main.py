@@ -7,7 +7,7 @@ from fasthtml.common import Article, Div, Script, Titled
 from starlette.applications import Starlette
 from starlette.responses import StreamingResponse
 
-from mqtt_monitor import MQTTMonitor
+from mqtt_monitor import Message, MQTTMonitor, NodeDB
 
 mqtt_monitor = MQTTMonitor()
 
@@ -30,16 +30,25 @@ app, rt = ft.fast_app(
 )
 
 
+def gen_message_ui(messages: list[Message]) -> list[ft.FT]:
+    ui = list[ft.FT]()
+    for message in messages:
+        user = NodeDB[message.message["from"]]
+        msg_ui = Div(
+            Div(user["short_name"], cls="avatar"),
+            Article(str(message), id=f"message_{message.id}"),
+        )
+        ui.append(msg_ui)
+    return ui
+
+
 @app.get("/")
 def home() -> ft.FT:
     return Titled(
         "Meshtastic MQTT Monitor",
         Div(
             Div(
-                *[
-                    Article(str(message), id=f"message_{message.id}")
-                    for message in mqtt_monitor.ring_buffer.fetch_all()
-                ],
+                *gen_message_ui(mqtt_monitor.ring_buffer.fetch_all()),
                 id="messages",
                 hx_get="/fetch-messages",
                 hx_trigger="sse:new_message",
@@ -55,22 +64,17 @@ def home() -> ft.FT:
 @app.get("/sse-new-msg")
 async def new_message() -> StreamingResponse:
     async def notify() -> AsyncGenerator[str, None]:
-        shutdown_event = ft.signal_shutdown()
-
-        while not shutdown_event.is_set():  # TODO: handle shutdown event
-            await asyncio.to_thread(mqtt_monitor.ring_buffer.wait)
-            yield ft.sse_message("new msg", event="new_message")
+        while True:
+            if await asyncio.to_thread(mqtt_monitor.ring_buffer.wait, 5):
+                yield ft.sse_message("new msg", event="new_message")
 
     return StreamingResponse(notify(), media_type="text/event-stream")
 
 
 @app.get("/fetch-messages")
 def fetch_messages(current_id: int) -> list[ft.FT]:
-    return [
-        Article(str(message), id=f"message_{message.id}")
-        for message in mqtt_monitor.ring_buffer.fetch_new(current_id)
-    ]
+    return gen_message_ui(mqtt_monitor.ring_buffer.fetch_new(current_id))
 
 
 if __name__ == "__main__":
-    ft.serve()
+    ft.serve(reload=False)

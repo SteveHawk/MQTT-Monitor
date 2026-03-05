@@ -36,11 +36,26 @@ type Payload = (
     | None
 )
 
+NodeDB: dict[int, dict[str, str]] = {
+    0xFFFFFFFF: {"id": "", "long_name": "Broadcast", "short_name": "📢"}
+}
+
+
+def node_num_to_nodedb_entry(node_num: int) -> dict[str, str]:
+    node_id = f"!{hex(node_num)[2:]}"
+    return {
+        "id": node_id,
+        "long_name": f"Meshtastic {node_id[-4:]}",
+        "short_name": node_id[-4:],
+    }
+
 
 class Message:
     def __init__(self, id: int, packet: mesh_pb2.MeshPacket, payload: Payload) -> None:
         self.id = id
         self.message = self.to_dict(packet, payload)
+        self.payload = self.message["decoded"].get("payload")
+        self.display, self.display_bubble = self.filter(packet)
 
     def __str__(self) -> str:
         return str(self.message)
@@ -62,6 +77,23 @@ class Message:
             if isinstance(val, google.protobuf.message.Message):
                 result[desc.name] = self._to_dict(val)
         return result
+
+    def filter(self, packet: mesh_pb2.MeshPacket) -> tuple[bool, bool]:
+        if packet.decoded.portnum == portnums_pb2.NODEINFO_APP:
+            NodeDB[self.message["from"]] = {
+                "id": self.payload.get("id"),
+                "long_name": self.payload.get("long_name"),
+                "short_name": self.payload.get("short_name"),
+            }
+        else:
+            if (node_num := self.message["from"]) not in NodeDB:
+                NodeDB[node_num] = node_num_to_nodedb_entry(node_num)
+            if (node_num := self.message["to"]) not in NodeDB:
+                NodeDB[node_num] = node_num_to_nodedb_entry(node_num)
+        return (
+            packet.decoded.portnum not in [portnums_pb2.NODEINFO_APP],
+            packet.decoded.portnum in [portnums_pb2.TEXT_MESSAGE_APP],
+        )
 
 
 class RingBuffer:
@@ -88,9 +120,9 @@ class RingBuffer:
     def fetch_new(self, current_id: int) -> list[Message]:
         return list(self.deque)[min(0, current_id - self.max_id) :]
 
-    def wait(self) -> None:
+    def wait(self, timeout: int | float | None = None) -> bool:
         with self.condition:
-            self.condition.wait()
+            return self.condition.wait(timeout)
 
 
 class MQTTMonitor:
@@ -159,7 +191,7 @@ class MQTTMonitor:
             message = Message(self.ring_buffer.new_id(), packet, payload)
             self.ring_buffer.append(message)
 
-            logger.info(f"{msg.topic}: {message}")
+            logger.info(f"{msg.topic}: [{message.id}] {message}")
 
         except Exception:
             logger.exception(f"Packet parse error: {msg.payload!r}")
