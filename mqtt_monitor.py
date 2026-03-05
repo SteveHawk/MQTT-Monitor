@@ -1,7 +1,7 @@
 import base64
 from collections import deque
 from threading import Condition
-from typing import Annotated, Any
+from typing import Annotated, Any, Self
 
 import google.protobuf.message
 import paho.mqtt.client as mqtt
@@ -52,25 +52,34 @@ def node_num_to_nodedb_entry(node_num: int) -> dict[str, str]:
 
 
 class Message:
-    def __init__(self, id: int, packet: mesh_pb2.MeshPacket, payload: Payload) -> None:
+    def __init__(self, id: int, message: dict[str, Any]) -> None:
         self.id = id
-        self.message = self.to_dict(packet, payload)
+        self.message = message
         self.payload = self.message["decoded"].get("payload")
-        self.display, self.display_bubble = self.filter(packet)
+        self.display, self.display_bubble = self.filter(message["decoded"]["portnum"])
 
     def __str__(self) -> str:
         return str(self.message)
 
-    def to_dict(self, packet: mesh_pb2.MeshPacket, payload: Payload) -> dict[str, Any]:
+    @classmethod
+    def from_packet(
+        cls, id: int, packet: mesh_pb2.MeshPacket, payload: Payload
+    ) -> Self:
+        message = cls.to_dict(packet, payload)
+        return cls(id, message)
+
+    @classmethod
+    def to_dict(cls, packet: mesh_pb2.MeshPacket, payload: Payload) -> dict[str, Any]:
         """Convert packet and payload to dictionary."""
-        packet_dict = self._to_dict(packet)
+        packet_dict = cls._to_dict(packet)
         if payload:
             packet_dict["decoded"]["payload"] = (
-                payload if isinstance(payload, str) else self._to_dict(payload)
+                payload if isinstance(payload, str) else cls._to_dict(payload)
             )
         return packet_dict
 
-    def _to_dict(self, message: google.protobuf.message.Message) -> dict[str, Any]:
+    @classmethod
+    def _to_dict(cls, message: google.protobuf.message.Message) -> dict[str, Any]:
         """Convert google.protobuf.message.Message to dictionary."""
         result = dict[str, Any]()
         for desc, val in message.ListFields():
@@ -78,12 +87,12 @@ class Message:
                 val = enum_type.values_by_number[val].name
             result[desc.name] = val
             if isinstance(val, google.protobuf.message.Message):
-                result[desc.name] = self._to_dict(val)
+                result[desc.name] = cls._to_dict(val)
         return result
 
-    def filter(self, packet: mesh_pb2.MeshPacket) -> tuple[bool, bool]:
+    def filter(self, portnum: str) -> tuple[bool, bool]:
         """Filter packets, load NodeDB, determine which packets to display and how to display."""
-        if packet.decoded.portnum == portnums_pb2.NODEINFO_APP:
+        if portnum == "NODEINFO_APP":
             NodeDB[self.message["from"]] = {
                 "id": self.payload.get("id"),
                 "long_name": self.payload.get("long_name"),
@@ -94,10 +103,7 @@ class Message:
                 NodeDB[node_num] = node_num_to_nodedb_entry(node_num)
             if (node_num := self.message["to"]) not in NodeDB:
                 NodeDB[node_num] = node_num_to_nodedb_entry(node_num)
-        return (
-            packet.decoded.portnum not in [portnums_pb2.NODEINFO_APP],
-            packet.decoded.portnum in [portnums_pb2.TEXT_MESSAGE_APP],
-        )
+        return portnum != "NODEINFO_APP", portnum == "TEXT_MESSAGE_APP"
 
 
 class RingBuffer:
@@ -137,7 +143,7 @@ class RingBuffer:
 
 class MQTTMonitor:
     def __init__(self) -> None:
-        settings = Settings()
+        settings = self.settings = Settings()
 
         self.mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, userdata=settings)
         self.mqttc.on_connect = self.on_connect
@@ -200,7 +206,7 @@ class MQTTMonitor:
             payload = self.decode_payload(packet)
 
             # Pack into ring buffer
-            message = Message(self.ring_buffer._new_id(), packet, payload)
+            message = Message.from_packet(self.ring_buffer._new_id(), packet, payload)
             self.ring_buffer.append(message)
 
             logger.info(f"{msg.topic}: [{message.id}] {message}")

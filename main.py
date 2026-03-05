@@ -3,7 +3,20 @@ import contextlib
 from typing import AsyncGenerator
 
 import fasthtml.common as ft
-from fasthtml.common import Article, Div, P, Script, Titled
+from fasthtml.common import (
+    H1,
+    Article,
+    Button,
+    Code,
+    Div,
+    Footer,
+    Link,
+    Main,
+    Mark,
+    Script,
+    Small,
+    Title,
+)
 from sse_starlette import EventSourceResponse, ServerSentEvent
 from starlette.applications import Starlette
 
@@ -26,8 +39,9 @@ app, rt = ft.fast_app(
         Script(
             # Script for calculating current_id to avoid missing messages
             'function getMsgId() { var msgs = [...document.querySelectorAll("#messages [id]")];'
-            'return msgs.length === 0 ? 0 : msgs.pop().id.split("_")[1]; }'
+            'return msgs.length === 0 ? 0 : msgs[0].id.split("_")[1]; }'
         ),
+        Link(rel="stylesheet", href="style.css", type="text/css"),
     ),
 )
 
@@ -38,32 +52,51 @@ def gen_message_ui(messages: list[Message]) -> list[ft.FT]:
     for message in messages:
         user = NodeDB[message.message["from"]]
         msg_ui = Div(
-            Div(user["short_name"], cls="avatar"),
-            Article(str(message), id=f"message_{message.id}"),
+            Div(Small(user["short_name"]), cls="msg-avatar"),
+            Article(str(message), id=f"message_{message.id}", cls="msg-bubble"),
+            cls="msg-div",
         )
         ui.append(msg_ui)
-    return ui
+    return ui[::-1]
 
 
 @app.get("/")
-def home() -> ft.FT:
+def home() -> tuple[ft.FT, ...]:
     """Main page."""
-    return Titled(
-        "Meshtastic MQTT Monitor",
-        Div(
+    return (
+        Title(title := "Meshtastic MQTT Monitor"),
+        Main(
             Div(
-                *gen_message_ui(mqtt_monitor.ring_buffer.fetch_all()),
-                id="messages",
-                hx_get="/fetch-messages",  # fetch new message
-                hx_trigger="sse:new_message",  # trigger fetch new message
-                hx_vals="js:{current_id: getMsgId()}",  # calculate current_id to avoid missing messages
-                hx_swap="beforeend show:bottom",
+                H1(title),
+                Small(
+                    "Server:",
+                    Code(mqtt_monitor.settings.address),
+                    " Topic:",
+                    Code(mqtt_monitor.settings.root_topic),
+                    " Channel:",
+                    Code(mqtt_monitor.settings.channel),
+                ),
+                cls="title",
             ),
-            hx_ext="sse",
-            sse_connect="/sse-new-msg",  # SSE endpoint
-            hx_swap="beforeend show:bottom",
-            sse_swap="sse_close_msg",  # server shutdown display
-            sse_close="sse_close",  # shutdown SSE connection
+            Div(
+                Div(
+                    *gen_message_ui(mqtt_monitor.ring_buffer.fetch_all()),
+                    id="messages",
+                    cls="messages",
+                    hx_get="/fetch-messages",  # fetch new message
+                    hx_trigger="sse:new_message",  # trigger fetch new message
+                    hx_vals="js:{current_id: getMsgId()}",  # calculate current_id to avoid missing messages
+                    hx_swap="beforeend show:bottom",
+                ),
+                Footer(Button("Refresh", hx_on_click="location.reload()")),
+                cls="messages-outer",
+                hx_ext="sse",
+                sse_connect="/sse-new-msg",  # SSE endpoint
+                hx_swap="beforeend show:bottom",
+                sse_swap="sse_close_msg",  # server shutdown display
+                sse_close="sse_close",  # shutdown SSE connection
+            ),
+            cls="container",  # pico css centered viewport
         ),
     )
 
@@ -72,13 +105,16 @@ def home() -> ft.FT:
 async def new_message() -> EventSourceResponse:
     """SSE endpoint for incoming new message notification."""
     shutdown_event = asyncio.Event()
+    shutdown_elm = Div(
+        Mark("Server shutdown, refresh to reconnect"), cls="shutdown-sign"
+    )
 
     async def notify() -> AsyncGenerator[ServerSentEvent, None]:
         while not shutdown_event.is_set():
             if await asyncio.to_thread(mqtt_monitor.ring_buffer.wait, 5):
                 yield ServerSentEvent("new msg", event="new_message")
 
-        yield ServerSentEvent(P("Server shutdown."), event="sse_close_msg")
+        yield ServerSentEvent(shutdown_elm, event="sse_close_msg")
         yield ServerSentEvent("sse close", event="sse_close")
 
     return EventSourceResponse(
