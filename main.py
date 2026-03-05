@@ -3,9 +3,9 @@ import contextlib
 from typing import AsyncGenerator
 
 import fasthtml.common as ft
-from fasthtml.common import Article, Div, Script, Titled
+from fasthtml.common import Article, Div, P, Script, Titled
+from sse_starlette import EventSourceResponse, ServerSentEvent
 from starlette.applications import Starlette
-from starlette.responses import StreamingResponse
 
 from mqtt_monitor import Message, MQTTMonitor, NodeDB
 
@@ -57,18 +57,30 @@ def home() -> ft.FT:
             ),
             hx_ext="sse",
             sse_connect="/sse-new-msg",
+            hx_swap="beforeend show:bottom",
+            sse_swap="sse_close_msg",
+            sse_close="sse_close",
         ),
     )
 
 
 @app.get("/sse-new-msg")
-async def new_message() -> StreamingResponse:
-    async def notify() -> AsyncGenerator[str, None]:
-        while True:
-            if await asyncio.to_thread(mqtt_monitor.ring_buffer.wait, 5):
-                yield ft.sse_message("new msg", event="new_message")
+async def new_message() -> EventSourceResponse:
+    shutdown_event = asyncio.Event()
 
-    return StreamingResponse(notify(), media_type="text/event-stream")
+    async def notify() -> AsyncGenerator[ServerSentEvent, None]:
+        while not shutdown_event.is_set():
+            if await asyncio.to_thread(mqtt_monitor.ring_buffer.wait, 5):
+                yield ServerSentEvent("new msg", event="new_message")
+
+        yield ServerSentEvent(P("Server shutdown."), event="sse_close_msg")
+        yield ServerSentEvent("sse close", event="sse_close")
+
+    return EventSourceResponse(
+        notify(),
+        shutdown_event=shutdown_event,  # type: ignore
+        shutdown_grace_period=10,
+    )
 
 
 @app.get("/fetch-messages")

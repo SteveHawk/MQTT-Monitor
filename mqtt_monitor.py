@@ -150,8 +150,9 @@ class MQTTMonitor:
         self.mqttc.loop_start()
 
     def __exit__(self, exc_type: Any, exc_valuee: Any, traceback: Any) -> None:
-        self.mqttc.loop_stop()
         self.mqttc.disconnect()
+        self.mqttc.loop_stop()
+        logger.info("MQTT disconnected.")
 
     @staticmethod
     def on_connect(
@@ -163,9 +164,9 @@ class MQTTMonitor:
     ) -> None:
         """The callback for when the client receives a CONNACK response from the server."""
         if reason_code.is_failure:
-            logger.error(f"Connect failed with result code `{reason_code}`")
+            logger.error(f"MQTT connect failed with reason code `{reason_code}`")
         else:
-            logger.success(f"Connected with result code `{reason_code}`")
+            logger.success(f"MQTT connected with reason code `{reason_code}`")
 
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.

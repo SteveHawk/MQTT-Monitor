@@ -11,6 +11,7 @@ dependencies = [
     "paho-mqtt>=2.1.0",
     "pydantic-settings>=2.13.1",
     "python-fasthtml>=0.12.47",
+    "sse-starlette>=3.3.2",
 ]
 
 [dependency-groups]
