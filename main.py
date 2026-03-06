@@ -12,7 +12,7 @@ from fasthtml.common import (
     Footer,
     Link,
     Main,
-    Mark,
+    P,
     Script,
     Small,
     Title,
@@ -107,9 +107,7 @@ def home() -> tuple[ft.FT, ...]:
 async def new_message() -> EventSourceResponse:
     """SSE endpoint for incoming new message notification."""
     shutdown_event = asyncio.Event()
-    shutdown_elm = Div(
-        Mark("Server shutdown, refresh to reconnect"), cls="shutdown-sign"
-    )
+    shutdown_elm = Div(P("Server shutdown, refresh to reconnect"), cls="shutdown-sign")
 
     async def notify() -> AsyncGenerator[ServerSentEvent, None]:
         while not shutdown_event.is_set():
