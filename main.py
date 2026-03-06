@@ -86,13 +86,15 @@ def home() -> tuple[ft.FT, ...]:
                     hx_get="/fetch-messages",  # fetch new message
                     hx_trigger="sse:new_message",  # trigger fetch new message
                     hx_vals="js:{current_id: getMsgId()}",  # calculate current_id to avoid missing messages
-                    hx_swap="beforeend show:bottom",
+                    hx_target="this",
+                    hx_swap="afterbegin show:bottom",
                 ),
                 Footer(Button("Refresh", hx_on_click="location.reload()")),
                 cls="messages-outer",
                 hx_ext="sse",
                 sse_connect="/sse-new-msg",  # SSE endpoint
-                hx_swap="beforeend show:bottom",
+                hx_target="footer",
+                hx_swap="beforeend",
                 sse_swap="sse_close_msg",  # server shutdown display
                 sse_close="sse_close",  # shutdown SSE connection
             ),
