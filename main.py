@@ -49,16 +49,17 @@ def gen_message_ui(messages: list[Message], text_only: bool) -> list[ft.FT]:
     """Generate message list UI."""
     ui = list[ft.FT]()
     for message in messages:
+        dt = datetime.fromtimestamp(message.message["rx_time"])
+        if message.new_day:
+            if ui and ui[-1].get("class") == "date-bubble":
+                ui.pop()  # remove duplicate
+            ui.append(Div(Code(dt.strftime("%Y-%m-%d")), cls="date-bubble"))
+
         if text_only and (not message.is_text):
             continue
 
-        dt = datetime.fromtimestamp(message.message["rx_time"])
-        timestamp = Small(dt.strftime("%Y-%m-%d %H:%M:%S"), cls="bubble-date")
-
-        if message.new_day:
-            ui.append(Div(Code(dt.strftime("%Y-%m-%d")), cls="date-bubble"))
-
         user = NodeDB[message.message["from"]]
+        timestamp = Small(dt.strftime("%m-%d %H:%M:%S"), cls="bubble-date")
 
         if text_only:
             msg_ui = Div(
@@ -81,7 +82,7 @@ def gen_message_ui(messages: list[Message], text_only: bool) -> list[ft.FT]:
                     Mark(Small(user["short_name"]), cls="pkg-avatar"),
                     Small(f"{user['long_name']} -> {uer_to['long_name']}"),
                 ),
-                Code(str(message), timestamp, id=f"message_{message.id}"),
+                Code(str(message), timestamp, id=f"packet_{message.id}"),
                 cls="pkg-div",
             )
         ui.append(msg_ui)
@@ -107,11 +108,13 @@ def home() -> tuple[ft.FT, ...]:
                 ),
             ),
             Div(
-                Button("Messages", cls="tab-button", hx_on_click="selectTab()"),
+                Button(
+                    "Messages", cls="tab-button", hx_on_click='selectTab("messages")'
+                ),
                 Button(
                     "Raw Packets",
                     cls="tab-button outline secondary",
-                    hx_on_click="selectTab()",
+                    hx_on_click='selectTab("packets")',
                 ),
                 role="group",
                 cls="tab-switcher",
@@ -123,9 +126,20 @@ def home() -> tuple[ft.FT, ...]:
                     cls="messages",
                     hx_get="/fetch-messages",  # fetch new message
                     hx_trigger="sse:new_message, manual_refresh",  # trigger fetch new message
-                    hx_vals="js:{current_id: getMsgId()}",  # calculate current_id to avoid missing messages
+                    hx_vals="js:{current_id: getMsgId(), text_only: true}",  # calculate current_id to avoid missing messages
                     hx_target="this",
                     hx_swap="afterbegin show:bottom",
+                ),
+                Div(
+                    *gen_message_ui(mqtt_monitor.ring_buffer.fetch_all(), False),
+                    id="packets",
+                    cls="messages",
+                    hx_get="/fetch-messages",  # fetch new message
+                    hx_trigger="sse:new_packet, manual_refresh",  # trigger fetch new message
+                    hx_vals="js:{current_id: getMsgId(), text_only: false}",  # calculate current_id to avoid missing messages
+                    hx_target="this",
+                    hx_swap="afterbegin show:bottom",
+                    hidden=True,
                 ),
                 cls="messages-outer",
                 hx_ext="sse",
@@ -155,7 +169,10 @@ async def new_message() -> EventSourceResponse:
     async def notify() -> AsyncGenerator[ServerSentEvent, None]:
         while not shutdown_event.is_set():
             if await asyncio.to_thread(mqtt_monitor.ring_buffer.wait, 5):
-                yield ServerSentEvent("new msg", event="new_message")
+                if msg := mqtt_monitor.ring_buffer.fetch_latest():
+                    if msg.is_text:
+                        yield ServerSentEvent("new msg", event="new_message")
+                    yield ServerSentEvent("new msg", event="new_packet")
 
         yield ServerSentEvent(shutdown_elm, event="sse_close_msg")
         yield ServerSentEvent("sse close", event="sse_close")
@@ -168,9 +185,9 @@ async def new_message() -> EventSourceResponse:
 
 
 @app.get("/fetch-messages")
-def fetch_messages(current_id: int) -> list[ft.FT]:
+def fetch_messages(current_id: int, text_only: bool) -> list[ft.FT]:
     """Endpoint for fetching latest messages."""
-    return gen_message_ui(mqtt_monitor.ring_buffer.fetch_new(current_id), True)
+    return gen_message_ui(mqtt_monitor.ring_buffer.fetch_new(current_id), text_only)
 
 
 if __name__ == "__main__":

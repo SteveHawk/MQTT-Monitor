@@ -15,10 +15,12 @@ function jumpToLastMsg() {
 }
 
 // switch tabs
-function selectTab() {
-    var tab_buttons = document.querySelectorAll(".tab-button");
-    tab_buttons.forEach(button => {
+function selectTab(type) {
+    document.querySelectorAll(".tab-button").forEach(button => {
         button.classList.toggle("outline");
         button.classList.toggle("secondary");
     });
+    document.querySelectorAll(".messages").forEach(messages => {
+        messages.hidden = (messages.id !== type)
+    })
 }
