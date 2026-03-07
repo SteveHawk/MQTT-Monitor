@@ -36,13 +36,7 @@ app, rt = ft.fast_app(
     lifespan=mqttc_lifespan,
     hdrs=(
         Script(src="https://unpkg.com/htmx-ext-sse@2.2.1/sse.js"),  # SSE extension
-        Script(
-            # Script for calculating current_id to avoid missing messages
-            'function getMsgId() { var msgs = [...document.querySelectorAll("#messages [id]")];'
-            'return msgs.length === 0 ? 0 : msgs[0].id.split("_")[1]; }'
-            'function manualRefresh() { htmx.trigger("#messages", "manual_refresh", {}) }'
-            'function jumpToLastMsg() { document.querySelector("#message_" + getMsgId()).scrollIntoView(); }'
-        ),
+        Script(src="script.js"),
         Link(rel="stylesheet", href="style.css", type="text/css"),
     ),
 )
