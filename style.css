@@ -5,7 +5,7 @@ main {
 }
 
 .title {
-    margin-bottom: 1em;
+    margin-bottom: 0.5rem;
 
     H1 {
         margin-bottom: 0;
@@ -23,12 +23,12 @@ main {
 
     button {
         float: right;
-        margin: 1em 0 0 1em;
+        margin: var(--pico-spacing) 0 0 var(--pico-spacing);
     }
 }
 
 .messages {
-    border: 2px solid white;
+    border: 2px solid var(--pico-contrast-border);
     border-radius: 10px;
     padding: 20px;
 
@@ -44,7 +44,7 @@ main {
 }
 
 .msg-avatar {
-    background: steelblue;
+    background: var(--pico-primary-background);
     width: 40px;
     height: 40px;
     border-radius: 50%;
@@ -62,11 +62,12 @@ main {
 }
 
 .shutdown-sign {
-    margin-top: 1em;
+    margin-top: var(--pico-spacing);
 
     p {
         color: tomato;
         font-style: italic;
-        padding: 0.5em 0 0 0.5em;
+        padding: var(--pico-form-element-spacing-vertical) var(--pico-form-element-spacing-horizontal);
+        margin-bottom: 0;
     }
 }
