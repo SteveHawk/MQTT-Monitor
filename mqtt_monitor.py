@@ -37,7 +37,7 @@ type Payload = (
 )
 
 NodeDB: dict[int, dict[str, str]] = {
-    0xFFFFFFFF: {"id": "", "long_name": "Broadcast", "short_name": "📢"}
+    0xFFFFFFFF: {"id": "Broadcast", "long_name": "Broadcast 📢", "short_name": "📢"}
 }
 
 
