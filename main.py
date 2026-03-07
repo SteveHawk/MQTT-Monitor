@@ -10,6 +10,7 @@ from fasthtml.common import (
     Code,
     Div,
     Footer,
+    Header,
     Link,
     Main,
     P,
@@ -62,7 +63,7 @@ def home() -> tuple[ft.FT, ...]:
     return (
         Title(title := "Meshtastic MQTT Monitor"),
         Main(
-            Div(
+            Header(
                 H1(title),
                 Small(
                     "Server:",
@@ -72,20 +73,13 @@ def home() -> tuple[ft.FT, ...]:
                     " Channel:",
                     Code(mqtt_monitor.settings.channel),
                 ),
-                cls="title",
             ),
             Div(
-                Button(
-                    "Messages",
-                    id="tab-button-messages",
-                    cls="tab-button",
-                    hx_on_click="selectTab(this)",
-                ),
+                Button("Messages", cls="tab-button", hx_on_click="selectTab()"),
                 Button(
                     "Raw Packets",
-                    id="tab-button-packets",
                     cls="tab-button outline secondary",
-                    hx_on_click="selectTab(this)",
+                    hx_on_click="selectTab()",
                 ),
                 role="group",
                 cls="tab-switcher",
@@ -101,10 +95,6 @@ def home() -> tuple[ft.FT, ...]:
                     hx_target="this",
                     hx_swap="afterbegin show:bottom",
                 ),
-                Footer(
-                    Button("Refresh", hx_on_click="manualRefresh()"),
-                    Button("Scroll To Bottom", hx_on_click="jumpToLastMsg()"),
-                ),
                 cls="messages-outer",
                 hx_ext="sse",
                 sse_connect="/sse-new-msg",  # SSE endpoint
@@ -112,6 +102,10 @@ def home() -> tuple[ft.FT, ...]:
                 hx_swap="beforeend",
                 sse_swap="sse_close_msg",  # server shutdown display
                 sse_close="sse_close",  # shutdown SSE connection
+            ),
+            Footer(
+                Button("Refresh", hx_on_click="manualRefresh()"),
+                Button("Scroll To Bottom", hx_on_click="jumpToLastMsg()"),
             ),
             cls="container",  # pico css centered viewport
         ),

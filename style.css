@@ -4,7 +4,7 @@ main {
     height: 100vh;
 }
 
-.title {
+header {
     margin-bottom: 0.625rem;
 
     H1 {
@@ -31,11 +31,6 @@ main {
     /* prevent vertical overflow */
     min-height: 0;
     overflow: hidden;
-
-    button {
-        float: right;
-        margin: var(--pico-spacing) 0 0 var(--pico-spacing);
-    }
 }
 
 .messages {
@@ -74,13 +69,20 @@ main {
     border-radius: 40px 40px 40px 2px;
 }
 
-.shutdown-sign {
-    margin-top: var(--pico-spacing);
+footer {
+    button {
+        float: right;
+        margin: var(--pico-spacing) 0 0 var(--pico-spacing);
+    }
 
-    p {
-        color: tomato;
-        font-style: italic;
-        padding: var(--pico-form-element-spacing-vertical) var(--pico-form-element-spacing-horizontal);
-        margin-bottom: 0;
+    .shutdown-sign {
+        margin-top: var(--pico-spacing);
+
+        p {
+            color: tomato;
+            font-style: italic;
+            padding: var(--pico-form-element-spacing-vertical) var(--pico-form-element-spacing-horizontal);
+            margin-bottom: 0;
+        }
     }
 }
