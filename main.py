@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+from datetime import datetime
 from typing import AsyncGenerator
 
 import fasthtml.common as ft
@@ -13,6 +14,7 @@ from fasthtml.common import (
     Header,
     Link,
     Main,
+    Mark,
     P,
     Script,
     Small,
@@ -43,17 +45,47 @@ app, rt = ft.fast_app(
 )
 
 
-def gen_message_ui(messages: list[Message]) -> list[ft.FT]:
+def gen_message_ui(messages: list[Message], text_only: bool) -> list[ft.FT]:
     """Generate message list UI."""
     ui = list[ft.FT]()
     for message in messages:
+        if text_only and (not message.is_text):
+            continue
+
+        dt = datetime.fromtimestamp(message.message["rx_time"])
+        timestamp = Small(dt.strftime("%Y-%m-%d %H:%M:%S"), cls="bubble-date")
+
+        if message.new_day:
+            ui.append(Div(Code(dt.strftime("%Y-%m-%d")), cls="date-bubble"))
+
         user = NodeDB[message.message["from"]]
-        msg_ui = Div(
-            Div(Small(user["short_name"]), cls="msg-avatar"),
-            Article(str(message), id=f"message_{message.id}", cls="msg-bubble"),
-            cls="msg-div",
-        )
+
+        if text_only:
+            msg_ui = Div(
+                Div(Small(user["short_name"]), cls="msg-avatar"),
+                Div(
+                    Small(f"{user['long_name']}"),
+                    Article(
+                        str(message.payload),
+                        timestamp,
+                        id=f"message_{message.id}",
+                        cls="msg-bubble",
+                    ),
+                ),
+                cls="msg-div",
+            )
+        else:
+            uer_to = NodeDB[message.message["to"]]
+            msg_ui = Div(
+                Div(
+                    Mark(Small(user["short_name"]), cls="pkg-avatar"),
+                    Small(f"{user['long_name']} -> {uer_to['long_name']}"),
+                ),
+                Code(str(message), timestamp, id=f"message_{message.id}"),
+                cls="pkg-div",
+            )
         ui.append(msg_ui)
+
     return ui[::-1]
 
 
@@ -86,7 +118,7 @@ def home() -> tuple[ft.FT, ...]:
             ),
             Div(
                 Div(
-                    *gen_message_ui(mqtt_monitor.ring_buffer.fetch_all()),
+                    *gen_message_ui(mqtt_monitor.ring_buffer.fetch_all(), True),
                     id="messages",
                     cls="messages",
                     hx_get="/fetch-messages",  # fetch new message
@@ -138,7 +170,7 @@ async def new_message() -> EventSourceResponse:
 @app.get("/fetch-messages")
 def fetch_messages(current_id: int) -> list[ft.FT]:
     """Endpoint for fetching latest messages."""
-    return gen_message_ui(mqtt_monitor.ring_buffer.fetch_new(current_id))
+    return gen_message_ui(mqtt_monitor.ring_buffer.fetch_new(current_id), True)
 
 
 if __name__ == "__main__":

@@ -31,42 +31,66 @@ header {
     /* prevent vertical overflow */
     min-height: 0;
     overflow: hidden;
+
+    .messages {
+        border: var(--pico-border-width) solid var(--pico-contrast-border);
+        border-top-width: 0;
+
+        border-radius: 0 0 10px 10px;
+        padding: 20px;
+
+        display: flex;
+        flex-direction: column-reverse;
+        flex: 1;
+
+        overflow-y: auto;
+    }
+
 }
 
-.messages {
-    border: var(--pico-border-width) solid var(--pico-contrast-border);
-    border-top-width: 0;
-
-    border-radius: 0 0 10px 10px;
-    padding: 20px;
-
+.date-bubble {
     display: flex;
-    flex-direction: column-reverse;
-    flex: 1;
-
-    overflow-y: auto;
+    justify-content: center;
+    margin: var(--pico-spacing);
 }
 
 .msg-div {
     display: flex;
+
+    .msg-avatar {
+        background: var(--pico-primary-background);
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        margin-right: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        aspect-ratio: 1/1;
+        align-self: end;
+        margin-bottom: 15px;
+    }
+
+
+    .msg-bubble {
+        border-radius: 40px 40px 40px 2px;
+        display: flex;
+    }
 }
 
-.msg-avatar {
-    background: var(--pico-primary-background);
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    margin-right: 15px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    aspect-ratio: 1/1;
-    align-self: end;
-    margin-bottom: 15px;
+.pkg-div {
+    .pkg-avatar {
+        border-radius: 0.5rem;
+        margin-right: 0.5rem;
+    }
 }
 
-.msg-bubble {
-    border-radius: 40px 40px 40px 2px;
+.bubble-date {
+    font-size: x-small;
+    color: var(--pico-secondary);
+    margin: var(--pico-spacing);
+    margin-bottom: 0;
+    float: right;
 }
 
 footer {

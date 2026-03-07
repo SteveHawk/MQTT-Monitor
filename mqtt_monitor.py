@@ -1,5 +1,6 @@
 import base64
 from collections import deque
+from datetime import datetime
 from threading import Condition
 from typing import Annotated, Any, Self
 
@@ -46,7 +47,7 @@ def node_num_to_nodedb_entry(node_num: int) -> dict[str, str]:
     node_id = f"!{hex(node_num)[2:]}"
     return {
         "id": node_id,
-        "long_name": f"Meshtastic {node_id[-4:]}",
+        "long_name": f"Node {node_id}",
         "short_name": node_id[-4:],
     }
 
@@ -56,7 +57,8 @@ class Message:
         self.id = id
         self.message = message
         self.payload = self.message["decoded"].get("payload")
-        self.display, self.display_bubble = self.filter(message["decoded"]["portnum"])
+        self.is_text = self.filter(message["decoded"]["portnum"])
+        self.new_day = False
 
     def __str__(self) -> str:
         return str(self.message)
@@ -90,7 +92,7 @@ class Message:
                 result[desc.name] = cls._to_dict(val)
         return result
 
-    def filter(self, portnum: str) -> tuple[bool, bool]:
+    def filter(self, portnum: str) -> bool:
         """Filter packets, load NodeDB, determine which packets to display and how to display."""
         if portnum == "NODEINFO_APP":
             NodeDB[self.message["from"]] = {
@@ -103,7 +105,7 @@ class Message:
                 NodeDB[node_num] = node_num_to_nodedb_entry(node_num)
             if (node_num := self.message["to"]) not in NodeDB:
                 NodeDB[node_num] = node_num_to_nodedb_entry(node_num)
-        return portnum != "NODEINFO_APP", portnum == "TEXT_MESSAGE_APP"
+        return portnum == "TEXT_MESSAGE_APP"
 
 
 class RingBuffer:
@@ -115,6 +117,12 @@ class RingBuffer:
     def append(self, message: Message) -> None:
         """Append a new messsage."""
         with self.condition:
+            if last_msg := self.fetch_latest():
+                last_dt = datetime.fromtimestamp(last_msg.message["rx_time"])
+                dt = datetime.fromtimestamp(message.message["rx_time"])
+                if dt.date() != last_dt.date():
+                    message.new_day = True
+
             self.deque.append(message)
             self.max_id = message.id
             self.condition.notify_all()
@@ -127,8 +135,10 @@ class RingBuffer:
         """Fetch all messages in queue."""
         return list(self.deque)
 
-    def fetch_latest(self) -> Message:
+    def fetch_latest(self) -> Message | None:
         """Fetch the latest message."""
+        if len(self.deque) == 0:
+            return None
         return self.deque[-1]
 
     def fetch_new(self, current_id: int) -> list[Message]:
