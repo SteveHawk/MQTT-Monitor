@@ -116,7 +116,7 @@ class RingBuffer:
         """Append a new messsage."""
         with self.condition:
             self.deque.append(message)
-            self.max_id += 1
+            self.max_id = message.id
             self.condition.notify_all()
 
     def _new_id(self) -> int:
@@ -133,7 +133,9 @@ class RingBuffer:
 
     def fetch_new(self, current_id: int) -> list[Message]:
         """Fetch missed new messages later than current_id."""
-        return list(self.deque)[min(0, current_id - self.max_id) :]
+        if current_id >= self.max_id:
+            return []
+        return list(self.deque)[(current_id - self.max_id) :]
 
     def wait(self, timeout: int | float | None = None) -> bool:
         """Wait for new message."""
