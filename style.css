@@ -74,7 +74,7 @@ header {
 
     .msg-bubble {
         border-radius: 40px 40px 40px 2px;
-        display: flex;
+        overflow: hidden;
     }
 }
 
@@ -88,9 +88,9 @@ header {
 .bubble-date {
     font-size: x-small;
     color: var(--pico-secondary);
-    margin: var(--pico-spacing);
-    margin-bottom: 0;
+    margin: 0.5rem 0.5rem 0 1rem;
     float: right;
+    text-wrap: nowrap;
 }
 
 footer {
