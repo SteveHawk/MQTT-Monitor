@@ -75,6 +75,22 @@ def home() -> tuple[ft.FT, ...]:
                 cls="title",
             ),
             Div(
+                Button(
+                    "Messages",
+                    id="tab-button-messages",
+                    cls="tab-button",
+                    hx_on_click="selectTab(this)",
+                ),
+                Button(
+                    "Raw Packets",
+                    id="tab-button-packets",
+                    cls="tab-button outline secondary",
+                    hx_on_click="selectTab(this)",
+                ),
+                role="group",
+                cls="tab-switcher",
+            ),
+            Div(
                 Div(
                     *gen_message_ui(mqtt_monitor.ring_buffer.fetch_all()),
                     id="messages",

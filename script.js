@@ -13,3 +13,12 @@ function manualRefresh() {
 function jumpToLastMsg() {
     document.querySelector("#message_" + getMsgId()).scrollIntoView();
 }
+
+// switch tabs
+function selectTab() {
+    var tab_buttons = document.querySelectorAll(".tab-button");
+    tab_buttons.forEach(button => {
+        button.classList.toggle("outline");
+        button.classList.toggle("secondary");
+    });
+}

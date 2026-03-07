@@ -5,10 +5,21 @@ main {
 }
 
 .title {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.625rem;
 
     H1 {
         margin-bottom: 0;
+    }
+}
+
+.tab-switcher {
+    margin-bottom: 0;
+    box-shadow: none;
+
+    button {
+        padding: var(--pico-text-underline-offset);
+        border: var(--pico-border-width) solid var(--pico-contrast-border);
+        border-radius: 10px 10px 0 0;
     }
 }
 
@@ -28,8 +39,10 @@ main {
 }
 
 .messages {
-    border: 2px solid var(--pico-contrast-border);
-    border-radius: 10px;
+    border: var(--pico-border-width) solid var(--pico-contrast-border);
+    border-top-width: 0;
+
+    border-radius: 0 0 10px 10px;
     padding: 20px;
 
     display: flex;
