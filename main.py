@@ -40,6 +40,8 @@ app, rt = ft.fast_app(
             # Script for calculating current_id to avoid missing messages
             'function getMsgId() { var msgs = [...document.querySelectorAll("#messages [id]")];'
             'return msgs.length === 0 ? 0 : msgs[0].id.split("_")[1]; }'
+            'function manualRefresh() { htmx.trigger("#messages", "manual_refresh", {}) }'
+            'function jumpToLastMsg() { document.querySelector("#message_" + getMsgId()).scrollIntoView(); }'
         ),
         Link(rel="stylesheet", href="style.css", type="text/css"),
     ),
@@ -84,12 +86,15 @@ def home() -> tuple[ft.FT, ...]:
                     id="messages",
                     cls="messages",
                     hx_get="/fetch-messages",  # fetch new message
-                    hx_trigger="sse:new_message",  # trigger fetch new message
+                    hx_trigger="sse:new_message, manual_refresh",  # trigger fetch new message
                     hx_vals="js:{current_id: getMsgId()}",  # calculate current_id to avoid missing messages
                     hx_target="this",
                     hx_swap="afterbegin show:bottom",
                 ),
-                Footer(Button("Refresh", hx_on_click="location.reload()")),
+                Footer(
+                    Button("Refresh", hx_on_click="manualRefresh()"),
+                    Button("Scroll To Bottom", hx_on_click="jumpToLastMsg()"),
+                ),
                 cls="messages-outer",
                 hx_ext="sse",
                 sse_connect="/sse-new-msg",  # SSE endpoint
@@ -107,7 +112,9 @@ def home() -> tuple[ft.FT, ...]:
 async def new_message() -> EventSourceResponse:
     """SSE endpoint for incoming new message notification."""
     shutdown_event = asyncio.Event()
-    shutdown_elm = Div(P("Server shutdown, refresh to reconnect"), cls="shutdown-sign")
+    shutdown_elm = Div(
+        P("Server shutdown, refresh page to reconnect"), cls="shutdown-sign"
+    )
 
     async def notify() -> AsyncGenerator[ServerSentEvent, None]:
         while not shutdown_event.is_set():
