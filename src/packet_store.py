@@ -32,23 +32,25 @@ def node_num_to_nodedb_entry(node_num: int) -> dict[str, str]:
     }
 
 
-class Message:
-    def __init__(self, id: int, message: dict[str, Any]) -> None:
-        self.id = id
-        self.message = message
-        self.payload = self.message["decoded"].get("payload")
-        self.is_text = self.filter(message["decoded"]["portnum"])
+class Packet:
+    def __init__(self, pkt_id: int, msg_id: int, packet: dict[str, Any]) -> None:
+        self.pkt_id = pkt_id
+        self.packet = packet
+        self.payload = self.packet["decoded"].get("payload")
+        self.is_text = self.filter(packet["decoded"]["portnum"])
+        self.msg_id = msg_id if self.is_text else None
         self.new_day = False
 
     def __str__(self) -> str:
-        return str(self.message)
+        return str(self.packet)
 
     @classmethod
-    def from_packet(
-        cls, id: int, packet: mesh_pb2.MeshPacket, payload: Payload
+    def from_mesh_packet(
+        cls, ids: tuple[int, int], packet: mesh_pb2.MeshPacket, payload: Payload
     ) -> Self:
-        message = cls.to_dict(packet, payload)
-        return cls(id, message)
+        """Create a new Packet instance from mesh_pb2.MeshPacket and Payload."""
+        packet_dict = cls.to_dict(packet, payload)
+        return cls(*ids, packet_dict)
 
     @classmethod
     def to_dict(cls, packet: mesh_pb2.MeshPacket, payload: Payload) -> dict[str, Any]:
@@ -61,10 +63,10 @@ class Message:
         return packet_dict
 
     @classmethod
-    def _to_dict(cls, message: google.protobuf.message.Message) -> dict[str, Any]:
+    def _to_dict(cls, packet: google.protobuf.message.Message) -> dict[str, Any]:
         """Convert google.protobuf.message.Message to dictionary."""
         result = dict[str, Any]()
-        for desc, val in message.ListFields():
+        for desc, val in packet.ListFields():
             if enum_type := desc.enum_type:  # Use enum name instead of value
                 val = enum_type.values_by_number[val].name
             result[desc.name] = val
@@ -75,59 +77,100 @@ class Message:
     def filter(self, portnum: str) -> bool:
         """Filter packets, load NodeDB, determine which packets to display and how to display."""
         if portnum == "NODEINFO_APP":
-            NodeDB[self.message["from"]] = {
+            NodeDB[self.packet["from"]] = {
                 "id": self.payload.get("id"),
                 "long_name": self.payload.get("long_name"),
                 "short_name": self.payload.get("short_name"),
             }
         else:
-            if (node_num := self.message["from"]) not in NodeDB:
+            if (node_num := self.packet["from"]) not in NodeDB:
                 NodeDB[node_num] = node_num_to_nodedb_entry(node_num)
-            if (node_num := self.message["to"]) not in NodeDB:
+            if (node_num := self.packet["to"]) not in NodeDB:
                 NodeDB[node_num] = node_num_to_nodedb_entry(node_num)
         return portnum == "TEXT_MESSAGE_APP"
 
 
 class RingBuffer:
     def __init__(self, max_len: int = 128, max_id: int = 0) -> None:
-        self.deque = deque[Message](maxlen=max_len)
+        self.deque = deque[Packet](maxlen=max_len)
         self.max_id: int = max_id
         self.condition = threading.Condition()
 
-    def append(self, message: Message) -> None:
-        """Append a new messsage."""
+    def append(self, packet: Packet, max_id: int) -> None:
+        """Append a new Packet."""
         with self.condition:
-            if last_msg := self.fetch_latest():
-                last_dt = datetime.fromtimestamp(last_msg.message["rx_time"])
-                dt = datetime.fromtimestamp(message.message["rx_time"])
-                if dt.date() != last_dt.date():
-                    message.new_day = True
-
-            self.deque.append(message)
-            self.max_id = message.id
+            self.deque.append(packet)
+            self.max_id = max_id
             self.condition.notify_all()
 
-    def _new_id(self) -> int:
-        """Get a new id for Message."""
+    def new_id(self) -> int:
+        """Get a new id for Packet."""
         return self.max_id + 1
 
-    def fetch_all(self) -> list[Message]:
-        """Fetch all messages in queue."""
+    def fetch_all(self) -> list[Packet]:
+        """Fetch all Packets in queue."""
         return list(self.deque)
 
-    def fetch_latest(self) -> Message | None:
-        """Fetch the latest message."""
+    def fetch_latest(self) -> Packet | None:
+        """Fetch the latest Packet."""
         if len(self.deque) == 0:
             return None
         return self.deque[-1]
 
-    def fetch_new(self, current_id: int) -> list[Message]:
-        """Fetch missed new messages later than current_id."""
+    def fetch_new(self, current_id: int) -> list[Packet]:
+        """Fetch missed new Packets later than current_id."""
         if current_id >= self.max_id:
             return []
         return list(self.deque)[(current_id - self.max_id) :]
 
     def wait(self, timeout: int | float | None = None) -> bool:
-        """Wait for new message."""
+        """Wait for new Packet."""
         with self.condition:
             return self.condition.wait(timeout)
+
+
+class PacketStore:
+    def __init__(self) -> None:
+        self.pkt_ring = RingBuffer()
+        self.msg_ring = RingBuffer()
+
+    def append(self, packet: Packet) -> None:
+        """Append a new Packet."""
+        if last_msg := self.fetch_latest(text_only=False):
+            last_dt = datetime.fromtimestamp(last_msg.packet["rx_time"])
+            dt = datetime.fromtimestamp(packet.packet["rx_time"])
+            if dt.date() != last_dt.date():
+                packet.new_day = True
+
+        self.pkt_ring.append(packet, packet.pkt_id)
+        if packet.is_text:
+            assert packet.msg_id is not None
+            self.msg_ring.append(packet, packet.msg_id)
+
+    def new_id(self) -> tuple[int, int]:
+        """Get a new id for Packet."""
+        return self.pkt_ring.max_id, self.msg_ring.max_id
+
+    def fetch_all(self, text_only: bool) -> list[Packet]:
+        """Fetch all Packets in queue."""
+        if text_only:
+            return self.msg_ring.fetch_all()
+        return self.pkt_ring.fetch_all()
+
+    def fetch_latest(self, text_only: bool) -> Packet | None:
+        """Fetch the latest Packet."""
+        if text_only:
+            return self.msg_ring.fetch_latest()
+        return self.pkt_ring.fetch_latest()
+
+    def fetch_new(self, current_id: int, text_only: bool) -> list[Packet]:
+        """Fetch missed new Packets later than current_id."""
+        if text_only:
+            return self.msg_ring.fetch_new(current_id)
+        return self.pkt_ring.fetch_new(current_id)
+
+    def wait(self, timeout: int | float | None = None, text_only: bool = False) -> bool:
+        """Wait for new Packet."""
+        if text_only:
+            return self.msg_ring.wait(timeout)
+        return self.pkt_ring.wait(timeout)
