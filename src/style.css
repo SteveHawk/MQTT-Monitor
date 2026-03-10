@@ -73,12 +73,13 @@ header {
 
     .msg-bubble {
         border-radius: 2rem 2rem 2rem var(--pico-border-radius);
+        margin-bottom: 0;
         overflow: hidden;
     }
 }
 
-.pkg-div {
-    .pkg-avatar {
+.pkt-div {
+    .pkt-avatar {
         border-radius: 0.5rem;
         margin-right: 0.5rem;
     }

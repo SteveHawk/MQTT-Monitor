@@ -23,7 +23,8 @@ from fasthtml.common import (
 from sse_starlette import EventSourceResponse, ServerSentEvent
 from starlette.applications import Starlette
 
-from mqtt_monitor import Message, MQTTMonitor, NodeDB
+from mqtt_monitor import MQTTMonitor
+from packet_store import NodeDB, Packet
 
 mqtt_monitor = MQTTMonitor()
 
@@ -39,17 +40,17 @@ app, rt = ft.fast_app(
     lifespan=mqttc_lifespan,
     hdrs=(
         Script(src="https://unpkg.com/htmx-ext-sse@2.2.1/sse.js"),  # SSE extension
-        Script(src="script.js"),
-        Link(rel="stylesheet", href="style.css", type="text/css"),
+        Script(src="src/script.js"),
+        Link(rel="stylesheet", href="src/style.css", type="text/css"),
     ),
 )
 
 
-def gen_message_ui(messages: list[Message], text_only: bool) -> list[ft.FT]:
+def gen_message_ui(messages: list[Packet], text_only: bool) -> list[ft.FT]:
     """Generate message list UI."""
     ui = list[ft.FT]()
     for message in messages:
-        dt = datetime.fromtimestamp(message.message["rx_time"])
+        dt = datetime.fromtimestamp(message.timestamp)
         if message.new_day:
             if ui and ui[-1].get("class") == "date-bubble":
                 ui.pop()  # remove duplicate
@@ -58,7 +59,7 @@ def gen_message_ui(messages: list[Message], text_only: bool) -> list[ft.FT]:
         if text_only and (not message.is_text):
             continue
 
-        user = NodeDB[message.message["from"]]
+        user = NodeDB[message.packet["from"]]
         timestamp = Small(dt.strftime("%m-%d %H:%M:%S"), cls="bubble-date")
 
         if text_only:
@@ -69,21 +70,21 @@ def gen_message_ui(messages: list[Message], text_only: bool) -> list[ft.FT]:
                     Article(
                         str(message.payload),
                         timestamp,
-                        id=f"message_{message.id}",
+                        id=f"message_{message.msg_id}",
                         cls="msg-bubble",
                     ),
                 ),
                 cls="msg-div",
             )
         else:
-            uer_to = NodeDB[message.message["to"]]
+            uer_to = NodeDB[message.packet["to"]]
             msg_ui = Div(
                 Div(
-                    Mark(Small(user["short_name"]), cls="pkg-avatar"),
+                    Mark(Small(user["short_name"]), cls="pkt-avatar"),
                     Small(f"{user['long_name']} -> {uer_to['long_name']}"),
                 ),
-                Code(str(message), timestamp, id=f"packet_{message.id}"),
-                cls="pkg-div",
+                Code(str(message), timestamp, id=f"packet_{message.pkt_id}"),
+                cls="pkt-div",
             )
         ui.append(msg_ui)
 
@@ -121,7 +122,8 @@ def home() -> tuple[ft.FT, ...]:
             ),
             Div(
                 Div(
-                    *gen_message_ui(mqtt_monitor.ring_buffer.fetch_all(), True),
+                    # Messages UI
+                    *gen_message_ui(mqtt_monitor.packet_store.fetch_all(True), True),
                     id="messages",
                     cls="messages",
                     hx_get="/fetch-messages",  # fetch new message
@@ -131,11 +133,12 @@ def home() -> tuple[ft.FT, ...]:
                     hx_swap="afterbegin show:bottom",
                 ),
                 Div(
-                    *gen_message_ui(mqtt_monitor.ring_buffer.fetch_all(), False),
+                    # Packets UI
+                    *gen_message_ui(mqtt_monitor.packet_store.fetch_all(False), False),
                     id="packets",
                     cls="messages",
                     hx_get="/fetch-messages",  # fetch new message
-                    hx_trigger="sse:new_packet, manual_refresh",  # trigger fetch new message
+                    hx_trigger="sse:new_packet, manual_refresh",  # trigger fetch new packets
                     hx_vals="js:{current_id: getMsgId(), text_only: false}",  # calculate current_id to avoid missing messages
                     hx_target="this",
                     hx_swap="afterbegin show:bottom",
@@ -168,8 +171,8 @@ async def new_message() -> EventSourceResponse:
 
     async def notify() -> AsyncGenerator[ServerSentEvent, None]:
         while not shutdown_event.is_set():
-            if await asyncio.to_thread(mqtt_monitor.ring_buffer.wait, 5):
-                if msg := mqtt_monitor.ring_buffer.fetch_latest():
+            if await asyncio.to_thread(mqtt_monitor.packet_store.wait, 5, False):
+                if msg := mqtt_monitor.packet_store.fetch_latest(False):
                     if msg.is_text:
                         yield ServerSentEvent("new msg", event="new_message")
                     yield ServerSentEvent("new msg", event="new_packet")
@@ -187,7 +190,9 @@ async def new_message() -> EventSourceResponse:
 @app.get("/fetch-messages")
 def fetch_messages(current_id: int, text_only: bool) -> list[ft.FT]:
     """Endpoint for fetching latest messages."""
-    return gen_message_ui(mqtt_monitor.ring_buffer.fetch_new(current_id), text_only)
+    return gen_message_ui(
+        mqtt_monitor.packet_store.fetch_new(current_id, text_only), text_only
+    )
 
 
 if __name__ == "__main__":
