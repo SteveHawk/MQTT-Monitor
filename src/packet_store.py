@@ -1,4 +1,5 @@
 import threading
+import time
 from collections import deque
 from datetime import datetime
 from typing import Any, Self
@@ -40,6 +41,7 @@ class Packet:
         self.is_text = self.filter(packet["decoded"]["portnum"])
         self.msg_id = msg_id if self.is_text else None
         self.new_day = False
+        self.timestamp = time.time()
 
     def __str__(self) -> str:
         return str(self.packet)
@@ -137,8 +139,8 @@ class PacketStore:
     def append(self, packet: Packet) -> None:
         """Append a new Packet."""
         if last_msg := self.fetch_latest(text_only=False):
-            last_dt = datetime.fromtimestamp(last_msg.packet["rx_time"])
-            dt = datetime.fromtimestamp(packet.packet["rx_time"])
+            last_dt = datetime.fromtimestamp(last_msg.timestamp)
+            dt = datetime.fromtimestamp(packet.timestamp)
             if dt.date() != last_dt.date():
                 packet.new_day = True
 
@@ -149,7 +151,7 @@ class PacketStore:
 
     def new_id(self) -> tuple[int, int]:
         """Get a new id for Packet."""
-        return self.pkt_ring.max_id, self.msg_ring.max_id
+        return self.pkt_ring.new_id(), self.msg_ring.new_id()
 
     def fetch_all(self, text_only: bool) -> list[Packet]:
         """Fetch all Packets in queue."""
