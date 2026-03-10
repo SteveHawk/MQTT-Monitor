@@ -46,20 +46,18 @@ app, rt = ft.fast_app(
 )
 
 
-def gen_message_ui(messages: list[Packet], text_only: bool) -> list[ft.FT]:
+def gen_message_ui(packets: list[Packet], text_only: bool) -> list[ft.FT]:
     """Generate message list UI."""
     ui = list[ft.FT]()
-    for message in messages:
-        dt = datetime.fromtimestamp(message.timestamp)
-        if message.new_day:
-            if ui and ui[-1].get("class") == "date-bubble":
-                ui.pop()  # remove duplicate
+    for pkt in packets:
+        dt = datetime.fromtimestamp(pkt.timestamp)
+        if (text_only and pkt.msg_new_day) or (not text_only and pkt.pkt_new_day):
             ui.append(Div(Code(dt.strftime("%Y-%m-%d")), cls="date-bubble"))
 
-        if text_only and (not message.is_text):
+        if text_only and (not pkt.is_text):
             continue
 
-        user = NodeDB[message.packet["from"]]
+        user = NodeDB[pkt.packet["from"]]
         timestamp = Small(dt.strftime("%m-%d %H:%M:%S"), cls="bubble-date")
 
         if text_only:
@@ -68,22 +66,22 @@ def gen_message_ui(messages: list[Packet], text_only: bool) -> list[ft.FT]:
                 Div(
                     Small(f"{user['long_name']}"),
                     Article(
-                        str(message.payload),
+                        str(pkt.payload),
                         timestamp,
-                        id=f"message_{message.msg_id}",
+                        id=f"message_{pkt.msg_id}",
                         cls="msg-bubble",
                     ),
                 ),
                 cls="msg-div",
             )
         else:
-            uer_to = NodeDB[message.packet["to"]]
+            uer_to = NodeDB[pkt.packet["to"]]
             msg_ui = Div(
                 Div(
                     Mark(Small(user["short_name"]), cls="pkt-avatar"),
                     Small(f"{user['long_name']} -> {uer_to['long_name']}"),
                 ),
-                Code(str(message), timestamp, id=f"packet_{message.pkt_id}"),
+                Code(str(pkt), timestamp, id=f"packet_{pkt.pkt_id}"),
                 cls="pkt-div",
             )
         ui.append(msg_ui)

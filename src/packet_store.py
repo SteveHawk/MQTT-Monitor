@@ -2,7 +2,7 @@ import threading
 import time
 from collections import deque
 from datetime import datetime
-from typing import Any, Self
+from typing import Any, Callable, Self
 
 import google.protobuf.message
 from meshtastic.protobuf import mesh_pb2, telemetry_pb2
@@ -40,11 +40,18 @@ class Packet:
         self.payload = self.packet["decoded"].get("payload")
         self.is_text = self.filter(packet["decoded"]["portnum"])
         self.msg_id = msg_id if self.is_text else None
-        self.new_day = False
+        self.pkt_new_day = False
+        self.msg_new_day = False
         self.timestamp = time.time()
 
     def __str__(self) -> str:
         return str(self.packet)
+
+    def set_pkt_new_day(self) -> None:
+        self.pkt_new_day = True
+
+    def set_msg_new_day(self) -> None:
+        self.msg_new_day = True
 
     @classmethod
     def from_mesh_packet(
@@ -98,8 +105,16 @@ class RingBuffer:
         self.max_id: int = max_id
         self.condition = threading.Condition()
 
-    def append(self, packet: Packet, max_id: int) -> None:
+    def append(
+        self, packet: Packet, max_id: int, new_day_setter: Callable[[], None]
+    ) -> None:
         """Append a new Packet."""
+        if last_msg := self.fetch_latest():
+            last_dt = datetime.fromtimestamp(last_msg.timestamp)
+            dt = datetime.fromtimestamp(packet.timestamp)
+            if dt.date() != last_dt.date():
+                new_day_setter()
+
         with self.condition:
             self.deque.append(packet)
             self.max_id = max_id
@@ -138,16 +153,10 @@ class PacketStore:
 
     def append(self, packet: Packet) -> None:
         """Append a new Packet."""
-        if last_msg := self.fetch_latest(text_only=False):
-            last_dt = datetime.fromtimestamp(last_msg.timestamp)
-            dt = datetime.fromtimestamp(packet.timestamp)
-            if dt.date() != last_dt.date():
-                packet.new_day = True
-
-        self.pkt_ring.append(packet, packet.pkt_id)
+        self.pkt_ring.append(packet, packet.pkt_id, packet.set_pkt_new_day)
         if packet.is_text:
             assert packet.msg_id is not None
-            self.msg_ring.append(packet, packet.msg_id)
+            self.msg_ring.append(packet, packet.msg_id, packet.set_msg_new_day)
 
     def new_id(self) -> tuple[int, int]:
         """Get a new id for Packet."""
