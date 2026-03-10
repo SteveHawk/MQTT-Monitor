@@ -50,7 +50,7 @@ header {
 .date-bubble {
     display: flex;
     justify-content: center;
-    margin: var(--pico-spacing);
+    margin-top: var(--pico-spacing);
 }
 
 .msg-div {
