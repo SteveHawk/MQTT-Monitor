@@ -151,7 +151,7 @@ def home() -> tuple[ft.FT, ...]:
                 sse_close="sse_close",  # shutdown SSE connection
             ),
             Footer(
-                Button("Refresh", hx_on_click="manualRefresh()"),
+                Button("Refresh", id="refresh-button", hx_on_click="manualRefresh()"),
                 Button("Scroll To Bottom", hx_on_click="jumpToLastMsg()"),
             ),
             cls="container",  # pico css centered viewport
@@ -163,8 +163,14 @@ def home() -> tuple[ft.FT, ...]:
 async def new_message() -> EventSourceResponse:
     """SSE endpoint for incoming new message notification."""
     shutdown_event = asyncio.Event()
-    shutdown_elm = Div(
-        P("Server shutdown, refresh page to reconnect"), cls="shutdown-sign"
+    shutdown_elms = (
+        Div(P("Server shutdown, refresh page to reconnect"), cls="shutdown-sign"),
+        Button(
+            "Refresh",
+            id="refresh-button",
+            hx_swap_oob="true",  # so that we can swap the button
+            hx_on_click="location.reload()",
+        ),
     )
 
     async def notify() -> AsyncGenerator[ServerSentEvent, None]:
@@ -175,7 +181,7 @@ async def new_message() -> EventSourceResponse:
                         yield ServerSentEvent("new msg", event="new_message")
                     yield ServerSentEvent("new msg", event="new_packet")
 
-        yield ServerSentEvent(shutdown_elm, event="sse_close_msg")
+        yield ServerSentEvent(ft.to_xml(shutdown_elms), event="sse_close_msg")
         yield ServerSentEvent("sse close", event="sse_close")
 
     return EventSourceResponse(
