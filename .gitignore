@@ -11,3 +11,6 @@ wheels/
 
 # fasthtml
 .sesskey
+
+# Data files
+mqtt-monitor.db

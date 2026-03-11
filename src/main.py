@@ -24,7 +24,7 @@ from sse_starlette import EventSourceResponse, ServerSentEvent
 from starlette.applications import Starlette
 
 from mqtt_monitor import MQTTMonitor
-from packet_store import NodeDB, Packet
+from packet_store import Packet
 
 mqtt_monitor = MQTTMonitor()
 
@@ -32,7 +32,7 @@ mqtt_monitor = MQTTMonitor()
 @contextlib.asynccontextmanager
 async def mqttc_lifespan(app: Starlette) -> AsyncGenerator[None, None]:
     """Lifespan handler, run mqtt_monitor thread here seperately."""
-    with mqtt_monitor:
+    with mqtt_monitor.start():
         yield
 
 
@@ -57,7 +57,7 @@ def gen_message_ui(packets: list[Packet], text_only: bool) -> list[ft.FT]:
         if text_only and (not pkt.is_text):
             continue
 
-        user = NodeDB[pkt.packet["from"]]
+        user = mqtt_monitor.packet_store.fetch_nodeinfo(pkt.packet["from"])
         timestamp = Small(dt.strftime("%m-%d %H:%M:%S"), cls="bubble-date")
 
         if text_only:
@@ -75,7 +75,7 @@ def gen_message_ui(packets: list[Packet], text_only: bool) -> list[ft.FT]:
                 cls="msg-div",
             )
         else:
-            uer_to = NodeDB[pkt.packet["to"]]
+            uer_to = mqtt_monitor.packet_store.fetch_nodeinfo(pkt.packet["to"])
             msg_ui = Div(
                 Div(
                     Mark(Small(user["short_name"]), cls="pkt-avatar"),

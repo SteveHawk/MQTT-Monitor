@@ -1,5 +1,6 @@
 import base64
-from typing import Annotated, Any
+import contextlib
+from typing import Annotated, Generator
 
 import paho.mqtt.client as mqtt
 from cryptography.hazmat.backends import default_backend
@@ -41,16 +42,19 @@ class MQTTMonitor:
     def loop_forever(self) -> None:
         """Start MQTT server, blocking."""
         # self.mqttc.loop_forever()  # doesn't gracefully handle keyboard interrupt
-        with self:
+        with self.start():
             try:
                 self.mqttc._thread.join()  # type: ignore
             except KeyboardInterrupt:
                 logger.warning("Keyboard interrupt, exiting...")
 
-    def __enter__(self) -> None:
+    @contextlib.contextmanager
+    def start(self) -> Generator[None]:
         self.mqttc.loop_start()
 
-    def __exit__(self, exc_type: Any, exc_valuee: Any, traceback: Any) -> None:
+        with contextlib.closing(self.packet_store):
+            yield
+
         self.mqttc.disconnect()
         self.mqttc.loop_stop()
         logger.info("MQTT disconnected.")
