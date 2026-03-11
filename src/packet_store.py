@@ -160,7 +160,9 @@ class SQLiteStore:
     def insert_nodeinfo(self, node_info: dict[str, str | int]) -> None:
         with self.con:
             self.con.execute(
-                "INSERT INTO nodedb VALUES(:node_num, :id, :long_name, :short_name)",
+                "INSERT INTO nodedb VALUES(:node_num, :id, :long_name, :short_name)"
+                " ON CONFLICT(node_num) DO UPDATE SET"
+                " id=excluded.id, long_name=excluded.long_name, short_name=excluded.short_name",
                 node_info,
             )
 
