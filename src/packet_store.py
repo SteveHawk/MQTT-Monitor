@@ -55,6 +55,10 @@ class Packet:
             }
         )
 
+    def set_new_day(self, last_packet: Packet) -> None:
+        # TODO: check and set new day here
+        pass
+
     def set_pkt_new_day(self) -> None:
         self.pkt_new_day = True
 
@@ -117,6 +121,11 @@ class RingBuffer:
         """Get a new id for Packet."""
         return self.max_id + 1
 
+    @property
+    def min_id(self) -> int:
+        """Minimum id of this ring."""
+        return self.max_id - len(self.deque) + 1
+
     def fetch_all(self) -> list[Packet]:
         """Fetch all Packets in queue."""
         return list(self.deque)
@@ -129,9 +138,21 @@ class RingBuffer:
 
     def fetch_new(self, current_id: int) -> list[Packet]:
         """Fetch missed new Packets later than current_id."""
-        if current_id >= self.max_id:
-            return []  # TODO: return oob error instead
+        if current_id >= self.max_id:  # already latest
+            return []
+        if current_id + 1 < self.min_id:  # not enough cache
+            raise IndexError
         return list(self.deque)[(current_id - self.max_id) :]
+
+    def fetch_old(self, current_id: int, count: int) -> list[Packet]:
+        """Fetch old Packets earlier than current_id."""
+        if current_id - count < self.min_id:  # not enough cache
+            raise IndexError
+        if current_id > self.max_id:
+            raise RuntimeError(f"{current_id=} > {self.max_id=}")
+        return list(self.deque)[
+            (current_id - count - self.max_id - 1) : (current_id - self.max_id - 1)
+        ]
 
     def wait(self, timeout: int | float | None = None) -> bool:
         """Wait for new Packet."""
@@ -146,6 +167,7 @@ class SQLiteStore:
 
         with self.con:
             self.con.execute(
+                # TODO: two new day field
                 "CREATE TABLE IF NOT EXISTS packets(pkt_id INTEGER PRIMARY KEY, msg_id UNIQUE, packet, timestamp)"
             )
             self.con.execute(
@@ -183,15 +205,27 @@ class SQLiteStore:
             _values = (packet.pkt_id, packet.msg_id, _pkt, packet.timestamp)
             self.con.execute("INSERT INTO packets VALUES(?, ?, ?, ?)", _values)
 
-    def fetch_packets(self, pkt_id: int) -> list[Packet]:
+    def fetch_new_packets(self, pkt_id: int) -> list[Packet]:
         results: list[sqlite3.Row] = self.con.execute(
-            "SELECT * FROM packets WHERE pkt_id<? LIMIT 10", (pkt_id,)
+            "SELECT * FROM packets WHERE pkt_id>?", (pkt_id,)
         ).fetchall()
         return [Packet(**r) for r in results]
 
-    def fetch_messages(self, msg_id: int) -> list[Packet]:
+    def fetch_old_packets(self, pkt_id: int, count: int) -> list[Packet]:
         results: list[sqlite3.Row] = self.con.execute(
-            "SELECT * FROM packets WHERE msg_id<? LIMIT 10", (msg_id,)
+            "SELECT * FROM packets WHERE pkt_id<? LIMIT ?", (pkt_id, count)
+        ).fetchall()
+        return [Packet(**r) for r in results]
+
+    def fetch_new_messages(self, msg_id: int) -> list[Packet]:
+        results: list[sqlite3.Row] = self.con.execute(
+            "SELECT * FROM packets WHERE msg_id>?", (msg_id,)
+        ).fetchall()
+        return [Packet(**r) for r in results]
+
+    def fetch_old_messages(self, msg_id: int, count: int) -> list[Packet]:
+        results: list[sqlite3.Row] = self.con.execute(
+            "SELECT * FROM packets WHERE msg_id<? LIMIT ?", (msg_id, count)
         ).fetchall()
         return [Packet(**r) for r in results]
 
@@ -208,7 +242,9 @@ class PacketStore:
 
     def append(self, packet: Packet) -> None:
         """Append a new Packet."""
-        # TODO: insert nodedb here
+        self.insert_nodeinfo(packet)
+        self.sql_store.insert_packet(packet)
+        # TODO: rework set new day
         self.pkt_ring.append(packet, packet.pkt_id, packet.set_pkt_new_day)
         if packet.is_text:
             assert packet.msg_id is not None
@@ -232,10 +268,26 @@ class PacketStore:
 
     def fetch_new(self, current_id: int, text_only: bool) -> list[Packet]:
         """Fetch missed new Packets later than current_id."""
-        # TODO: catch oob error, do db lookup
         if text_only:
-            return self.msg_ring.fetch_new(current_id)
-        return self.pkt_ring.fetch_new(current_id)
+            try:
+                return self.msg_ring.fetch_new(current_id)
+            except IndexError:
+                return self.sql_store.fetch_new_messages(current_id)
+        try:
+            return self.pkt_ring.fetch_new(current_id)
+        except IndexError:
+            return self.sql_store.fetch_new_packets(current_id)
+
+    def fetch_old(self, current_id: int, text_only: bool, count: int) -> list[Packet]:
+        if text_only:
+            try:
+                return self.msg_ring.fetch_old(current_id, count)
+            except IndexError:
+                return self.sql_store.fetch_old_messages(current_id, count)
+        try:
+            return self.pkt_ring.fetch_old(current_id, count)
+        except IndexError:
+            return self.sql_store.fetch_old_packets(current_id, count)
 
     def wait(self, timeout: int | float | None = None, text_only: bool = False) -> bool:
         """Wait for new Packet."""
