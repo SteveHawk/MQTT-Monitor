@@ -4,7 +4,7 @@ import threading
 import time
 from collections import deque
 from datetime import datetime
-from typing import Any, Callable, Self
+from typing import Any, Callable, Iterable, Self
 
 import google.protobuf.message
 from meshtastic.protobuf import mesh_pb2, telemetry_pb2
@@ -29,8 +29,9 @@ class Packet:
         timestamp: int | None = None,
     ) -> None:
         self.packet = packet if isinstance(packet, dict) else json.loads(packet)
-        self.payload: dict | str | None = self.packet["decoded"].get("payload")
-        self.portnum: str | None = self.packet["decoded"].get("portnum")
+        _decoded = self.packet["decoded"]
+        self.payload: dict[str, Any] | str | None = _decoded.get("payload")
+        self.portnum: str | None = _decoded.get("portnum")
         self.is_text = bool(self.portnum == "TEXT_MESSAGE_APP")
 
         self.pkt_id = pkt_id
@@ -266,11 +267,11 @@ class PacketStore:
                 }
                 self.sql_store.insert_nodeinfo(self.node_db[node_num])
         else:
-            _node_info = (
+            _node_info: Iterable[tuple[str, str | int]] = zip(
                 ("node_num", "id", "long_name", "short_name"),
                 (node_num, *node_info),
             )
-            self.node_db[node_num] = dict(zip(_node_info))
+            self.node_db[node_num] = dict(_node_info)
             self.sql_store.insert_nodeinfo(self.node_db[node_num])
 
     def fetch_nodeinfo(self, node_num: int) -> dict[str, str | int]:

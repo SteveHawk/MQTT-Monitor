@@ -10,7 +10,7 @@ from meshtastic.protobuf import mesh_pb2, mqtt_pb2, portnums_pb2, telemetry_pb2
 from pydantic import AfterValidator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from packet_store import Packet, PacketStore, Payload
+from .packet_store import Packet, PacketStore, Payload
 
 
 class Settings(BaseSettings):

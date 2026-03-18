@@ -23,8 +23,8 @@ from fasthtml.common import (
 from sse_starlette import EventSourceResponse, ServerSentEvent
 from starlette.applications import Starlette
 
-from mqtt_monitor import MQTTMonitor
-from packet_store import Packet
+from .mqtt_monitor import MQTTMonitor
+from .packet_store import Packet
 
 mqtt_monitor = MQTTMonitor()
 
