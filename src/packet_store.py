@@ -4,7 +4,7 @@ import threading
 import time
 from collections import deque
 from datetime import datetime
-from typing import Any, Callable, Iterable, Self
+from typing import Any, Iterable, Self
 
 import google.protobuf.message
 from meshtastic.protobuf import mesh_pb2, telemetry_pb2
@@ -26,6 +26,8 @@ class Packet:
         pkt_id: int,
         msg_id: int,
         packet: dict[str, Any] | str,
+        pkt_new_day: bool = False,
+        msg_new_day: bool = False,
         timestamp: int | None = None,
     ) -> None:
         self.packet = packet if isinstance(packet, dict) else json.loads(packet)
@@ -37,54 +39,67 @@ class Packet:
         self.pkt_id = pkt_id
         self.msg_id = msg_id if self.is_text else None
 
-        self.pkt_new_day = False
-        self.msg_new_day = False
+        self.pkt_new_day = pkt_new_day
+        self.msg_new_day = msg_new_day
 
         self.timestamp = timestamp if timestamp else int(time.time())
 
     def __str__(self) -> str:
         return str(self.packet)
 
+    def to_dict(self, json_packet: bool = False) -> dict[str, Any]:
+        _pkt = self.packet
+        if json_packet:
+            _pkt = json.dumps(self.packet, separators=(",", ":"))
+        return {
+            "pkt_id": self.pkt_id,
+            "msg_id": self.msg_id,
+            "packet": _pkt,
+            "pkt_new_day": self.pkt_new_day,
+            "msg_new_day": self.msg_new_day,
+            "timestamp": self.timestamp,
+        }
+
     def __repr__(self) -> str:
-        return str(
-            {
-                "pkt_id": self.pkt_id,
-                "msg_id": self.msg_id,
-                "packet": self.packet,
-                "timestamp": self.timestamp,
-            }
-        )
+        return str(self.to_dict())
 
-    def set_new_day(self, last_packet: Packet) -> None:
-        # TODO: check and set new day here
-        pass
+    def set_new_day(self, last_packet: Packet | None, is_text: bool) -> None:
+        if last_packet is None:  # no previous packet, set as new day
+            return self._set_new_day(is_text)
 
-    def set_pkt_new_day(self) -> None:
-        self.pkt_new_day = True
+        last_dt = datetime.fromtimestamp(last_packet.timestamp)
+        dt = datetime.fromtimestamp(self.timestamp)
+        if dt.date() != last_dt.date():
+            self._set_new_day(is_text)
 
-    def set_msg_new_day(self) -> None:
-        self.msg_new_day = True
+    def _set_new_day(self, is_text: bool) -> None:
+        if is_text:
+            self.msg_new_day = True
+        else:
+            self.pkt_new_day = True
 
     @classmethod
     def from_mesh_packet(
         cls, ids: tuple[int, int], packet: mesh_pb2.MeshPacket, payload: Payload
     ) -> Self:
         """Create a new Packet instance from mesh_pb2.MeshPacket and Payload."""
-        packet_dict = cls.to_dict(packet, payload)
+        packet_dict = cls.pb_to_dict(packet, payload)
         return cls(*ids, packet_dict)
 
     @classmethod
-    def to_dict(cls, packet: mesh_pb2.MeshPacket, payload: Payload) -> dict[str, Any]:
+    def pb_to_dict(
+        cls, packet: mesh_pb2.MeshPacket, payload: Payload
+    ) -> dict[str, Any]:
         """Convert packet and payload to dictionary."""
-        packet_dict = cls._to_dict(packet)
+        packet_dict = cls._pb_to_dict(packet)
         if payload:
             packet_dict["decoded"]["payload"] = (
-                payload if isinstance(payload, str) else cls._to_dict(payload)
+                payload if isinstance(payload, str) else cls._pb_to_dict(payload)
             )
         return packet_dict
 
     @classmethod
-    def _to_dict(cls, packet: google.protobuf.message.Message) -> dict[str, Any]:
+    def _pb_to_dict(cls, packet: google.protobuf.message.Message) -> dict[str, Any]:
         """Convert google.protobuf.message.Message to dictionary."""
         result = dict[str, Any]()
         for desc, val in packet.ListFields():
@@ -92,7 +107,7 @@ class Packet:
                 val = enum_type.values_by_number[val].name
             result[desc.name] = val
             if isinstance(val, google.protobuf.message.Message):
-                result[desc.name] = cls._to_dict(val)
+                result[desc.name] = cls._pb_to_dict(val)
         return result
 
 
@@ -102,16 +117,8 @@ class RingBuffer:
         self.max_id: int = max_id
         self.condition = threading.Condition()
 
-    def append(
-        self, packet: Packet, max_id: int, new_day_setter: Callable[[], None]
-    ) -> None:
+    def append(self, packet: Packet, max_id: int) -> None:
         """Append a new Packet."""
-        if last_msg := self.fetch_latest():
-            last_dt = datetime.fromtimestamp(last_msg.timestamp)
-            dt = datetime.fromtimestamp(packet.timestamp)
-            if dt.date() != last_dt.date():
-                new_day_setter()
-
         with self.condition:
             self.deque.append(packet)
             self.max_id = max_id
@@ -167,11 +174,12 @@ class SQLiteStore:
 
         with self.con:
             self.con.execute(
-                # TODO: two new day field
-                "CREATE TABLE IF NOT EXISTS packets(pkt_id INTEGER PRIMARY KEY, msg_id UNIQUE, packet, timestamp)"
+                "CREATE TABLE IF NOT EXISTS packets(pkt_id INTEGER PRIMARY KEY,"
+                " msg_id UNIQUE, packet, pkt_new_day, msg_new_day, timestamp)"
             )
             self.con.execute(
-                "CREATE TABLE IF NOT EXISTS nodedb(node_num INTEGER PRIMARY KEY, id, long_name, short_name)"
+                "CREATE TABLE IF NOT EXISTS"
+                " nodedb(node_num INTEGER PRIMARY KEY, id, long_name, short_name)"
             )
             self.con.execute(
                 "INSERT INTO nodedb VALUES(0xFFFFFFFF, 'Broadcast', 'Broadcast 📢', '📢')"
@@ -184,8 +192,8 @@ class SQLiteStore:
         with self.con:
             self.con.execute(
                 "INSERT INTO nodedb VALUES(:node_num, :id, :long_name, :short_name)"
-                " ON CONFLICT(node_num) DO UPDATE SET"
-                " id=excluded.id, long_name=excluded.long_name, short_name=excluded.short_name",
+                " ON CONFLICT(node_num) DO UPDATE SET id=excluded.id,"
+                " long_name=excluded.long_name, short_name=excluded.short_name",
                 node_info,
             )
 
@@ -201,9 +209,11 @@ class SQLiteStore:
 
     def insert_packet(self, packet: Packet) -> None:
         with self.con:
-            _pkt = json.dumps(packet.packet, separators=(",", ":"))
-            _values = (packet.pkt_id, packet.msg_id, _pkt, packet.timestamp)
-            self.con.execute("INSERT INTO packets VALUES(?, ?, ?, ?)", _values)
+            self.con.execute(
+                "INSERT INTO packets VALUES"
+                "(:pkt_id, :msg_id, :packet, :pkt_new_day, :msg_new_day, :timestamp)",
+                packet.to_dict(True),
+            )
 
     def fetch_new_packets(self, pkt_id: int) -> list[Packet]:
         results: list[sqlite3.Row] = self.con.execute(
@@ -242,13 +252,20 @@ class PacketStore:
 
     def append(self, packet: Packet) -> None:
         """Append a new Packet."""
+        # Insert nodeinfo
         self.insert_nodeinfo(packet)
+
+        # Check if new day
+        packet.set_new_day(self.pkt_ring.fetch_latest(), False)
+        if packet.is_text:
+            packet.set_new_day(self.msg_ring.fetch_latest(), True)
+
+        # Insert into sql and rings
         self.sql_store.insert_packet(packet)
-        # TODO: rework set new day
-        self.pkt_ring.append(packet, packet.pkt_id, packet.set_pkt_new_day)
+        self.pkt_ring.append(packet, packet.pkt_id)
         if packet.is_text:
             assert packet.msg_id is not None
-            self.msg_ring.append(packet, packet.msg_id, packet.set_msg_new_day)
+            self.msg_ring.append(packet, packet.msg_id)
 
     def new_id(self) -> tuple[int, int]:
         """Get a new id for Packet."""
