@@ -106,7 +106,7 @@ def gen_load_more_ui(text_only: bool) -> ft.FT:
         if text_only
         else "js:{current_id: getFirstPktId(), text_only: false}",
         hx_target="this",
-        hx_swap="outerHTML swap:1s",
+        hx_swap="outerHTML swap:0.5s",
     )
 
 
