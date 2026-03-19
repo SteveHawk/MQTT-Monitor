@@ -16,10 +16,10 @@ from .packet_store import Packet, PacketStore
 
 
 class Settings(BaseSettings):
-    address: str = "mqtt.mess.host"
+    address: str = "mqtt.meshtastic.org"
     username: str = "meshdev"
     password: str = "large4cats"
-    root_topic: str = "msh/CN"
+    root_topic: str = "msh/US"
     channel: str = "LongFast"
     key: Annotated[
         str, AfterValidator(lambda k: "1PG7OiApB1nwvP+rz05pAQ==" if k == "AQ==" else k)
