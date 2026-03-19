@@ -48,6 +48,9 @@ class Packet:
             "timestamp": self.timestamp,
         }
 
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, Packet) and self.to_dict() == other.to_dict()
+
     def __repr__(self) -> str:
         return str(self.to_dict())
 
@@ -130,8 +133,8 @@ class RingBuffer:
 
 
 class SQLiteStore:
-    def __init__(self) -> None:
-        self.con = sqlite3.connect("mqtt-monitor.db", autocommit=False)
+    def __init__(self, database: str = "mqtt-monitor.db") -> None:
+        self.con = sqlite3.connect(database, autocommit=False)
         self.con.row_factory = sqlite3.Row
 
     def close(self) -> None:
