@@ -1,4 +1,3 @@
-import base64
 import contextlib
 import json
 import sqlite3
@@ -6,21 +5,7 @@ import threading
 import time
 from collections import deque
 from datetime import datetime
-from typing import Any, Generator, Iterable, Self, Sequence
-
-import google.protobuf.message
-from loguru import logger
-from meshtastic.protobuf import mesh_pb2, telemetry_pb2
-
-type Payload = (
-    str
-    | mesh_pb2.User
-    | mesh_pb2.Position
-    | mesh_pb2.RouteDiscovery
-    | mesh_pb2.NeighborInfo
-    | telemetry_pb2.Telemetry
-    | None
-)
+from typing import Any, Generator, Iterable
 
 
 class Packet:
@@ -80,58 +65,6 @@ class Packet:
             self.msg_new_day = True
         else:
             self.pkt_new_day = True
-
-    @classmethod
-    def from_mesh_packet(
-        cls, ids: tuple[int, int], packet: mesh_pb2.MeshPacket, payload: Payload
-    ) -> Self:
-        """Create a new Packet instance from mesh_pb2.MeshPacket and Payload."""
-        packet_dict = cls.pb_to_dict(packet, payload)
-        return cls(*ids, packet_dict)
-
-    @classmethod
-    def pb_to_dict(
-        cls, packet: mesh_pb2.MeshPacket, payload: Payload
-    ) -> dict[str, Any]:
-        """Convert packet and payload to dictionary."""
-        packet_dict = cls._pb_to_dict(packet)
-        if payload:
-            packet_dict["decoded"]["payload"] = (
-                payload if isinstance(payload, str) else cls._pb_to_dict(payload)
-            )
-        return packet_dict
-
-    @classmethod
-    def _pb_to_dict(cls, packet: google.protobuf.message.Message) -> dict[str, Any]:
-        """Convert google.protobuf.message.Message to dictionary."""
-
-        def type_handle(val: Any) -> Any:
-            if isinstance(val, (str, int, float)):
-                return val
-            elif isinstance(val, google.protobuf.message.Message):
-                return cls._pb_to_dict(val)
-            elif isinstance(val, bytes):
-                if desc.name == "macaddr":
-                    _mac = val.hex()
-                    return ":".join([_mac[i : i + 2] for i in range(0, len(_mac), 2)])
-                elif desc.name == "public_key":
-                    return base64.b64encode(val).decode()
-                else:
-                    if desc.name != "payload":
-                        logger.warning(f"New bytes type: {desc.name=} {val=}")
-                    return str(val)
-            elif isinstance(val, Sequence):  # RepeatedScalarContainer, etc
-                return [type_handle(v) for v in list(val)]
-            else:
-                logger.warning(f"New data type: {desc.name=} {type(val)=} {val=}")
-                return str(val)
-
-        result = dict[str, Any]()
-        for desc, val in packet.ListFields():
-            if enum_type := desc.enum_type:  # Use enum name instead of value
-                val = enum_type.values_by_number[val].name
-            result[desc.name] = type_handle(val)
-        return result
 
 
 class RingBuffer:

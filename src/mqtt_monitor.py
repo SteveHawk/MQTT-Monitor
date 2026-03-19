@@ -1,7 +1,8 @@
 import base64
 import contextlib
-from typing import Annotated, Generator
+from typing import Annotated, Any, Generator, Sequence
 
+import google.protobuf.message
 import paho.mqtt.client as mqtt
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -10,7 +11,7 @@ from meshtastic.protobuf import mesh_pb2, mqtt_pb2, portnums_pb2, telemetry_pb2
 from pydantic import AfterValidator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .packet_store import Packet, PacketStore, Payload
+from .packet_store import Packet, PacketStore
 
 
 class Settings(BaseSettings):
@@ -24,6 +25,17 @@ class Settings(BaseSettings):
     ] = "AQ=="
 
     model_config = SettingsConfigDict(env_prefix="mqtt_monitor_")
+
+
+type Payload = (
+    str
+    | mesh_pb2.User
+    | mesh_pb2.Position
+    | mesh_pb2.RouteDiscovery
+    | mesh_pb2.NeighborInfo
+    | telemetry_pb2.Telemetry
+    | None
+)
 
 
 class MQTTMonitor:
@@ -105,27 +117,32 @@ class MQTTMonitor:
     ) -> None:
         """The callback for when a PUBLISH message is received from the server."""
         try:
-            # Get message
-            service_envelope = mqtt_pb2.ServiceEnvelope()
-            service_envelope.ParseFromString(msg.payload)
-            packet = service_envelope.packet
+            # Parse message
+            packet_dict = self.process_message(msg.payload, userdata.key)
+            packet = Packet(*self.packet_store.new_id(), packet_dict)
+            logger.info(f"{msg.topic}: [{packet.pkt_id}][{packet.msg_id}] {packet}")
 
-            # Decrypt and decode
-            if packet.HasField("encrypted") and not packet.HasField("decoded"):
-                self.decode_encrypted(packet, userdata.key)
-            payload = self.decode_payload(packet)
-
-            # Pack into ring buffer
+            # Insert into ring buffer
             with self.packet_store.thread_sql_store():
-                message = Packet.from_mesh_packet(
-                    self.packet_store.new_id(), packet, payload
-                )
-                self.packet_store.append(message)
-
-            logger.info(f"{msg.topic}: [{message.pkt_id}][{message.msg_id}] {message}")
+                self.packet_store.append(packet)
 
         except Exception:
             logger.exception(f"Packet parse error: {msg.payload!r}")
+
+    @classmethod
+    def process_message(self, msg: bytes, key: str) -> dict[str, Any]:
+        # Get message
+        service_envelope = mqtt_pb2.ServiceEnvelope()
+        service_envelope.ParseFromString(msg)
+        packet = service_envelope.packet
+
+        # Decrypt and decode
+        if packet.HasField("encrypted") and not packet.HasField("decoded"):
+            self.decode_encrypted(packet, key)
+        payload = self.decode_payload(packet)
+
+        # Parse into dict
+        return self.to_dict(packet, payload)
 
     @staticmethod
     def decode_encrypted(packet: mesh_pb2.MeshPacket, key: str) -> None:
@@ -193,6 +210,48 @@ class MQTTMonitor:
                 portnum_name = portnums_pb2.PortNum.Name(portnum)
                 logger.warning(f"Not implemented PortNum: {portnum_name}, skip.")
                 return None
+
+    @classmethod
+    def to_dict(cls, packet: mesh_pb2.MeshPacket, payload: Payload) -> dict[str, Any]:
+        """Convert packet and payload to dictionary."""
+        packet_dict = cls._pb_to_dict(packet)
+        if payload:
+            packet_dict["decoded"]["payload"] = (
+                payload if isinstance(payload, str) else cls._pb_to_dict(payload)
+            )
+        return packet_dict
+
+    @classmethod
+    def _pb_to_dict(cls, packet: google.protobuf.message.Message) -> dict[str, Any]:
+        """Convert google.protobuf.message.Message to dictionary."""
+
+        def type_handle(val: Any) -> Any:
+            if isinstance(val, (str, int, float)):
+                return val
+            elif isinstance(val, google.protobuf.message.Message):
+                return cls._pb_to_dict(val)
+            elif isinstance(val, bytes):
+                if desc.name == "macaddr":
+                    _mac = val.hex()
+                    return ":".join([_mac[i : i + 2] for i in range(0, len(_mac), 2)])
+                elif desc.name == "public_key":
+                    return base64.b64encode(val).decode()
+                else:
+                    if desc.name != "payload":
+                        logger.warning(f"New bytes type: {desc.name=} {val=}")
+                    return str(val)
+            elif isinstance(val, Sequence):  # RepeatedScalarContainer, etc
+                return [type_handle(v) for v in list(val)]
+            else:
+                logger.warning(f"New data type: {desc.name=} {type(val)=} {val=}")
+                return str(val)
+
+        result = dict[str, Any]()
+        for desc, val in packet.ListFields():
+            if enum_type := desc.enum_type:  # Use enum name instead of value
+                val = enum_type.values_by_number[val].name
+            result[desc.name] = type_handle(val)
+        return result
 
 
 if __name__ == "__main__":
