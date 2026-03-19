@@ -53,7 +53,7 @@ app, rt = ft.fast_app(
 
 
 def gen_message_ui(packets: list[Packet], text_only: bool) -> list[ft.FT]:
-    """Generate message list UI."""
+    """Generate message list UI. pkt_id/msg_id should be sorted in ascending order."""
     ui = list[ft.FT]()
     for pkt in packets:
         dt = datetime.fromtimestamp(pkt.timestamp)

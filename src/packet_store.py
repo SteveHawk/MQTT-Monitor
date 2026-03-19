@@ -186,16 +186,17 @@ class SQLiteStore:
     def fetch_new_packets(self, pkt_id: int) -> list[Packet]:
         with self.con:
             results: list[sqlite3.Row] = self.con.execute(
-                "SELECT * FROM packets WHERE pkt_id>?", (pkt_id,)
+                "SELECT * FROM packets WHERE pkt_id>? ORDER BY pkt_id ASC", (pkt_id,)
             ).fetchall()
         return [Packet(**r) for r in results]
 
     def fetch_old_packets(self, pkt_id: int, count: int) -> list[Packet]:
         with self.con:
             results: list[sqlite3.Row] = self.con.execute(
-                "SELECT * FROM packets WHERE pkt_id<? LIMIT ?", (pkt_id, count)
+                "SELECT * FROM packets WHERE pkt_id<? ORDER BY pkt_id DESC LIMIT ?",
+                (pkt_id, count),
             ).fetchall()
-        return [Packet(**r) for r in results]
+        return [Packet(**r) for r in results][::-1]
 
     def fetch_latest_packets(self, count: int) -> list[Packet]:
         with self.con:
@@ -207,16 +208,17 @@ class SQLiteStore:
     def fetch_new_messages(self, msg_id: int) -> list[Packet]:
         with self.con:
             results: list[sqlite3.Row] = self.con.execute(
-                "SELECT * FROM packets WHERE msg_id>?", (msg_id,)
+                "SELECT * FROM packets WHERE msg_id>? ORDER BY msg_id ASC", (msg_id,)
             ).fetchall()
         return [Packet(**r) for r in results]
 
     def fetch_old_messages(self, msg_id: int, count: int) -> list[Packet]:
         with self.con:
             results: list[sqlite3.Row] = self.con.execute(
-                "SELECT * FROM packets WHERE msg_id<? LIMIT ?", (msg_id, count)
+                "SELECT * FROM packets WHERE msg_id<? ORDER BY msg_id DESC LIMIT ?",
+                (msg_id, count),
             ).fetchall()
-        return [Packet(**r) for r in results]
+        return [Packet(**r) for r in results][::-1]
 
     def fetch_latest_messages(self, count: int) -> list[Packet]:
         with self.con:
