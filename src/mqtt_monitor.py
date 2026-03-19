@@ -33,6 +33,7 @@ type Payload = (
     | mesh_pb2.Position
     | mesh_pb2.RouteDiscovery
     | mesh_pb2.NeighborInfo
+    | mesh_pb2.Routing
     | telemetry_pb2.Telemetry
     | None
 )
@@ -205,6 +206,11 @@ class MQTTMonitor:
                 neighbor_info = mesh_pb2.NeighborInfo()
                 neighbor_info.ParseFromString(payload)
                 return neighbor_info
+
+            case portnums_pb2.ROUTING_APP:
+                routing = mesh_pb2.Routing()
+                routing.ParseFromString(payload)
+                return routing
 
             case _:
                 portnum_name = portnums_pb2.PortNum.Name(portnum)
