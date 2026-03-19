@@ -7,6 +7,14 @@ function getLastPktId() {
     var msgs = [...document.querySelectorAll("#packets [id]")];
     return msgs.length === 0 ? 0 : msgs[0].id.split("_")[1];
 }
+function getFirstMsgId() {
+    var msgs = [...document.querySelectorAll("#messages [id]")];
+    return msgs.length === 0 ? 0 : msgs.pop().id.split("_")[1];
+}
+function getFirstPktId() {
+    var msgs = [...document.querySelectorAll("#packets [id]")];
+    return msgs.length === 0 ? 0 : msgs.pop().id.split("_")[1];
+}
 
 // refresh button
 function manualRefresh() {

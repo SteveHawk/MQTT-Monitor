@@ -50,6 +50,11 @@ header {
             margin-top: var(--pico-spacing);
         }
 
+        .load-more {
+            align-self: center;
+            margin-top: var(--pico-spacing);
+        }
+
         .msg-div {
             display: flex;
 

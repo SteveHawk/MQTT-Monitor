@@ -95,6 +95,20 @@ def gen_message_ui(packets: list[Packet], text_only: bool) -> list[ft.FT]:
     return ui[::-1]
 
 
+def gen_load_more_ui(text_only: bool) -> ft.FT:
+    return Div(
+        P("Loading more...", aria_busy="true"),
+        cls="load-more",
+        hx_get="/fetch-old-messages",
+        hx_trigger="intersect once threshold:0.8",
+        hx_vals="js:{current_id: getFirstMsgId(), text_only: true}"
+        if text_only
+        else "js:{current_id: getFirstPktId(), text_only: false}",
+        hx_target="this",
+        hx_swap="outerHTML swap:1s",
+    )
+
+
 @app.get("/")
 def home() -> tuple[ft.FT, ...]:
     """Main page."""
@@ -129,9 +143,10 @@ def home() -> tuple[ft.FT, ...]:
                 Div(
                     # Messages UI
                     *gen_message_ui(packet_store.fetch_latest(True, 20), True),
+                    gen_load_more_ui(True),  # Load more
                     id="messages",
                     cls="messages",
-                    hx_get="/fetch-messages",  # fetch new message
+                    hx_get="/fetch-new-messages",  # fetch new message
                     hx_trigger="sse:new_message, manual_refresh",  # trigger fetch new message
                     hx_vals="js:{current_id: getLastMsgId(), text_only: true}",  # calculate current_id to avoid missing messages
                     hx_target="this",
@@ -140,9 +155,10 @@ def home() -> tuple[ft.FT, ...]:
                 Div(
                     # Packets UI
                     *gen_message_ui(packet_store.fetch_latest(False, 20), False),
+                    gen_load_more_ui(False),  # Load more
                     id="packets",
                     cls="messages",
-                    hx_get="/fetch-messages",  # fetch new message
+                    hx_get="/fetch-new-messages",  # fetch new message
                     hx_trigger="sse:new_packet, manual_refresh",  # trigger fetch new packets
                     hx_vals="js:{current_id: getLastPktId(), text_only: false}",  # calculate current_id to avoid missing messages
                     hx_target="this",
@@ -198,10 +214,21 @@ async def new_message() -> EventSourceResponse:
     )
 
 
-@app.get("/fetch-messages")
-def fetch_messages(current_id: int, text_only: bool) -> list[ft.FT]:
+@app.get("/fetch-new-messages")
+async def fetch_new_messages(current_id: int, text_only: bool) -> list[ft.FT]:
     """Endpoint for fetching latest messages."""
     return gen_message_ui(packet_store.fetch_new(current_id, text_only), text_only)
+
+
+@app.get("/fetch-old-messages")
+async def fetch_old_messages(
+    current_id: int, text_only: bool, count: int = 10
+) -> list[ft.FT]:
+    """Endpoint for fetching latest messages."""
+    packets = packet_store.fetch_old(current_id, text_only, count)
+    if not packets:
+        return []
+    return gen_message_ui(packets, text_only) + [gen_load_more_ui(text_only)]
 
 
 if __name__ == "__main__":
