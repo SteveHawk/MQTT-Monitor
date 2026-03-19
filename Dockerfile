@@ -1,16 +1,14 @@
 FROM python:3.14-slim-trixie AS build
 
-# Copy the project into the image
-COPY . /app
+COPY ./pyproject.toml ./uv.lock /app/
 
-# Disable development dependencies
 ENV UV_NO_DEV=1
-
-# Sync the project into a new environment, asserting the lockfile is up to date
 WORKDIR /app/
 RUN --mount=from=ghcr.io/astral-sh/uv:0.10,source=/uv,target=/bin/uv \
     uv sync --locked &&\
-    mkdir target && mv .venv src target
+    mkdir target && mv .venv target
+
+COPY ./src/ /app/target/src/
 
 
 FROM python:3.14-slim-trixie AS default
