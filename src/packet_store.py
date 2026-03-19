@@ -6,9 +6,10 @@ import threading
 import time
 from collections import deque
 from datetime import datetime
-from typing import Any, Generator, Iterable, Self
+from typing import Any, Generator, Iterable, Self, Sequence
 
 import google.protobuf.message
+from loguru import logger
 from meshtastic.protobuf import mesh_pb2, telemetry_pb2
 
 type Payload = (
@@ -119,12 +120,13 @@ class Packet:
                 elif desc.name == "public_key":
                     result[desc.name] = base64.b64encode(val).decode()
                 else:
-                    # TODO: more bytes type
-                    print(f"New bytes: {desc.name=} {val=}")
+                    if desc.name != "payload":
+                        logger.warning(f"New bytes type: {desc.name=} {val=}")
                     result[desc.name] = str(val)
+            elif isinstance(val, Sequence):  # RepeatedScalarContainer
+                result[desc.name] = list(val)
             else:
-                # TODO: more types
-                print(f"{desc.name=} {type(val)=} {val=}")
+                logger.warning(f"New data type: {desc.name=} {type(val)=} {val=}")
                 result[desc.name] = str(val)
         return result
 
