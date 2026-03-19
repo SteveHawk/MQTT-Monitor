@@ -1,9 +1,16 @@
 **/.git/
+**/.jj/
+
 **/.idea/
 **/.vscode/
+
 **/.venv/
 **/.mypy_cache/
+**/.pytest_cache/
 **/__pycache__/
+
 **/.DS_Store/
-**/*.md
+
 **/Dockerfile*
+**/*.md
+**/*.db*
