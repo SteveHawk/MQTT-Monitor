@@ -159,11 +159,15 @@ class RingBuffer:
         """Fetch all Packets in queue."""
         return list(self.deque)
 
-    def fetch_latest(self) -> Packet | None:
-        """Fetch the latest Packet."""
+    def fetch_last(self) -> Packet | None:
+        """Fetch the last Packet."""
         if len(self.deque) == 0:
             return None
         return self.deque[-1]
+
+    def fetch_latest(self, count: int) -> list[Packet]:
+        """Fetch the lastest Packets."""
+        return list(self.deque)[-count:]
 
     def fetch_new(self, current_id: int) -> list[Packet]:
         """Fetch missed new Packets later than current_id."""
@@ -339,9 +343,9 @@ class PacketStore:
         self.insert_nodeinfo(packet)
 
         # Check if new day
-        packet.set_new_day(self.pkt_ring.fetch_latest(), False)
+        packet.set_new_day(self.pkt_ring.fetch_last(), False)
         if packet.is_text:
-            packet.set_new_day(self.msg_ring.fetch_latest(), True)
+            packet.set_new_day(self.msg_ring.fetch_last(), True)
 
         # Insert into sql and rings
         self.sql_store.insert_packet(packet)
@@ -359,11 +363,17 @@ class PacketStore:
             return self.msg_ring.fetch_all()
         return self.pkt_ring.fetch_all()
 
-    def fetch_latest(self, text_only: bool) -> Packet | None:
-        """Fetch the latest Packet."""
+    def fetch_last(self, text_only: bool) -> Packet | None:
+        """Fetch the last Packet."""
         if text_only:
-            return self.msg_ring.fetch_latest()
-        return self.pkt_ring.fetch_latest()
+            return self.msg_ring.fetch_last()
+        return self.pkt_ring.fetch_last()
+
+    def fetch_latest(self, text_only: bool, count: int) -> list[Packet]:
+        """Fetch the lastest Packets."""
+        if text_only:
+            return self.msg_ring.fetch_latest(count)
+        return self.pkt_ring.fetch_latest(count)
 
     def fetch_new(self, current_id: int, text_only: bool) -> list[Packet]:
         """Fetch missed new Packets later than current_id."""

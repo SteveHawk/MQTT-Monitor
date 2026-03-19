@@ -24,17 +24,21 @@ from sse_starlette import EventSourceResponse, ServerSentEvent
 from starlette.applications import Starlette
 
 from .mqtt_monitor import MQTTMonitor
-from .packet_store import Packet
+from .packet_store import Packet, PacketStore
 
 mqtt_monitor: MQTTMonitor
+packet_store: PacketStore
 
 
 @contextlib.asynccontextmanager
 async def mqttc_lifespan(app: Starlette) -> AsyncGenerator[None, None]:
     """Lifespan handler, run mqtt_monitor thread here seperately."""
-    global mqtt_monitor
+
+    global mqtt_monitor, packet_store
+
     mqtt_monitor = MQTTMonitor()
     with mqtt_monitor.start():
+        packet_store = mqtt_monitor.packet_store
         yield
 
 
@@ -59,7 +63,7 @@ def gen_message_ui(packets: list[Packet], text_only: bool) -> list[ft.FT]:
         if text_only and (not pkt.is_text):
             continue
 
-        user = mqtt_monitor.packet_store.fetch_nodeinfo(pkt.packet["from"])
+        user = packet_store.fetch_nodeinfo(pkt.packet["from"])
         timestamp = Small(dt.strftime("%m-%d %H:%M:%S"), cls="bubble-date")
 
         if text_only:
@@ -77,7 +81,7 @@ def gen_message_ui(packets: list[Packet], text_only: bool) -> list[ft.FT]:
                 cls="msg-div",
             )
         else:
-            uer_to = mqtt_monitor.packet_store.fetch_nodeinfo(pkt.packet["to"])
+            uer_to = packet_store.fetch_nodeinfo(pkt.packet["to"])
             msg_ui = Div(
                 Div(
                     Mark(Small(user["short_name"]), cls="pkt-avatar"),
@@ -94,6 +98,7 @@ def gen_message_ui(packets: list[Packet], text_only: bool) -> list[ft.FT]:
 @app.get("/")
 def home() -> tuple[ft.FT, ...]:
     """Main page."""
+    settings = mqtt_monitor.settings
     return (
         Title(title := "Meshtastic MQTT Monitor"),
         Main(
@@ -101,11 +106,11 @@ def home() -> tuple[ft.FT, ...]:
                 H1(title),
                 Small(
                     "Server:",
-                    Code(mqtt_monitor.settings.address),
+                    Code(settings.address),
                     " Topic:",
-                    Code(mqtt_monitor.settings.root_topic),
+                    Code(settings.root_topic),
                     " Channel:",
-                    Code(mqtt_monitor.settings.channel),
+                    Code(settings.channel),
                 ),
             ),
             Div(
@@ -123,7 +128,7 @@ def home() -> tuple[ft.FT, ...]:
             Div(
                 Div(
                     # Messages UI
-                    *gen_message_ui(mqtt_monitor.packet_store.fetch_all(True), True),
+                    *gen_message_ui(packet_store.fetch_latest(True, 20), True),
                     id="messages",
                     cls="messages",
                     hx_get="/fetch-messages",  # fetch new message
@@ -134,7 +139,7 @@ def home() -> tuple[ft.FT, ...]:
                 ),
                 Div(
                     # Packets UI
-                    *gen_message_ui(mqtt_monitor.packet_store.fetch_all(False), False),
+                    *gen_message_ui(packet_store.fetch_latest(False, 20), False),
                     id="packets",
                     cls="messages",
                     hx_get="/fetch-messages",  # fetch new message
@@ -177,8 +182,8 @@ async def new_message() -> EventSourceResponse:
 
     async def notify() -> AsyncGenerator[ServerSentEvent, None]:
         while not shutdown_event.is_set():
-            if await asyncio.to_thread(mqtt_monitor.packet_store.wait, 5, False):
-                if msg := mqtt_monitor.packet_store.fetch_latest(False):
+            if await asyncio.to_thread(packet_store.wait, 5, False):
+                if msg := packet_store.fetch_last(False):
                     if msg.is_text:
                         yield ServerSentEvent("new msg", event="new_message")
                     yield ServerSentEvent("new msg", event="new_packet")
@@ -196,9 +201,7 @@ async def new_message() -> EventSourceResponse:
 @app.get("/fetch-messages")
 def fetch_messages(current_id: int, text_only: bool) -> list[ft.FT]:
     """Endpoint for fetching latest messages."""
-    return gen_message_ui(
-        mqtt_monitor.packet_store.fetch_new(current_id, text_only), text_only
-    )
+    return gen_message_ui(packet_store.fetch_new(current_id, text_only), text_only)
 
 
 if __name__ == "__main__":
