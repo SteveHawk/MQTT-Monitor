@@ -9,7 +9,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from loguru import logger
 from meshtastic.protobuf import mesh_pb2, mqtt_pb2, portnums_pb2, telemetry_pb2
-from pydantic import AfterValidator
+from pydantic import AfterValidator, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .packet_store import Packet, PacketStore
@@ -27,6 +27,11 @@ class Settings(BaseSettings):
 
     packet_keep_count: int = 5000
     message_keep_days: int = 30
+
+    @computed_field
+    @property
+    def topic(self) -> str:
+        return f"{self.root_topic}/2/e/{self.channel}/#"
 
     model_config = SettingsConfigDict(env_prefix="mqtt_monitor_")
 
@@ -70,7 +75,10 @@ class MQTTMonitor:
     @contextlib.contextmanager
     def start(self) -> Generator[None]:
         """Context manager for starting and stopping the service."""
-        logger.info("Starting MQTT monitor...")
+        logger.info(
+            "Starting MQTT monitor,"
+            f" address={self.settings.address}, topic={self.settings.topic}"
+        )
         self.mqttc.loop_start()
 
         self.packet_store = PacketStore()
@@ -116,7 +124,7 @@ class MQTTMonitor:
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
         # About topic name: https://meshtastic.org/docs/software/integrations/mqtt/
-        client.subscribe(f"{userdata.root_topic}/2/e/{userdata.channel}/#")
+        client.subscribe(userdata.topic)
 
     def on_disconnect(
         self,
