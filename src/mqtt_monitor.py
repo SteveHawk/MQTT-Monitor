@@ -1,5 +1,6 @@
 import base64
 import contextlib
+import threading
 from typing import Annotated, Any, Generator, Sequence
 
 import google.protobuf.message
@@ -23,6 +24,11 @@ class Settings(BaseSettings):
     key: Annotated[
         str, AfterValidator(lambda k: "1PG7OiApB1nwvP+rz05pAQ==" if k == "AQ==" else k)
     ] = "AQ=="
+
+    packet_keep_days: int = 30
+    packet_keep_count: int = 5000
+    message_keep_days: int = 30
+    message_keep_count: int = 5000
 
     model_config = SettingsConfigDict(env_prefix="mqtt_monitor_")
 
@@ -52,6 +58,7 @@ class MQTTMonitor:
         self.mqttc.username_pw_set(settings.username, settings.password)
 
         self.packet_store: PacketStore
+        self.shutdown_event = threading.Event()
 
     def loop_forever(self) -> None:
         """Start MQTT server, blocking."""
@@ -64,15 +71,37 @@ class MQTTMonitor:
 
     @contextlib.contextmanager
     def start(self) -> Generator[None]:
+        """Context manager for starting and stopping the service."""
+        logger.info("Starting MQTT monitor...")
         self.mqttc.loop_start()
 
         self.packet_store = PacketStore()
         with contextlib.closing(self.packet_store):
+            cleanup_thread = threading.Thread(target=self.packets_cleanup_service)
+            cleanup_thread.start()
+
             yield
+
+            self.shutdown_event.set()
+            cleanup_thread.join()
 
         self.mqttc.disconnect()
         self.mqttc.loop_stop()
-        logger.info("MQTT disconnected.")
+        logger.info("MQTT monitor stopped.")
+
+    def packets_cleanup_service(self) -> None:
+        """Auto run packets table cleanup job."""
+        self.packet_store.thread_init()
+        _s = self.settings
+        while not self.shutdown_event.wait(3600):
+            with self.packet_store.thread_sql_store():
+                logger.info("Running packets cleanup.")
+                self.packet_store.cleanup(
+                    _s.packet_keep_days,
+                    _s.packet_keep_count,
+                    _s.message_keep_days,
+                    _s.message_keep_count,
+                )
 
     def on_connect(
         self,

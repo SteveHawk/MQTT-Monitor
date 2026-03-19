@@ -229,6 +229,27 @@ class SQLiteStore:
             ).fetchall()
         return [Packet(**r) for r in results][::-1]
 
+    def cleanup_packets(self, keep_days: int, keep_count: int) -> None:
+        time_thresh = int(time.time()) - keep_days * 86400
+        with self.con:
+            self.con.execute(
+                "DELETE FROM packets WHERE pkt_id IN ("
+                "SELECT pkt_id FROM packets WHERE msg_id IS NULL"
+                " ORDER BY pkt_id DESC LIMIT -1 OFFSET ?"
+                ") AND timestamp<?",
+                (keep_count, time_thresh),
+            )
+
+    def cleanup_messages(self, keep_days: int, keep_count: int) -> None:
+        time_thresh = int(time.time()) - keep_days * 86400
+        with self.con:
+            self.con.execute(
+                "DELETE FROM packets WHERE msg_id IN ("
+                "SELECT msg_id FROM packets ORDER BY msg_id DESC LIMIT -1 OFFSET ?"
+                ") AND timestamp<?",
+                (keep_count, time_thresh),
+            )
+
 
 class PacketStore:
     def __init__(self) -> None:
@@ -375,3 +396,13 @@ class PacketStore:
 
     def fetch_nodeinfo(self, node_num: int) -> dict[str, str | int]:
         return self.node_db[node_num]
+
+    def cleanup(
+        self,
+        pkt_keep_days: int,
+        pkt_keep_count: int,
+        msg_keep_days: int,
+        msg_keep_count: int,
+    ) -> None:
+        self.sql_store.cleanup_packets(pkt_keep_days, pkt_keep_count)
+        self.sql_store.cleanup_messages(msg_keep_days, msg_keep_count)
