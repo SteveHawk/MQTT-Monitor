@@ -1,22 +1,29 @@
-// calculate current_id to avoid missing messages
-function getMsgId() {
+// calculate current_id
+function getLastMsgId() {
     var msgs = [...document.querySelectorAll("#messages [id]")];
     return msgs.length === 0 ? 0 : msgs[0].id.split("_")[1];
 }
-function getPktId() {
+function getLastPktId() {
     var msgs = [...document.querySelectorAll("#packets [id]")];
     return msgs.length === 0 ? 0 : msgs[0].id.split("_")[1];
 }
 
 // refresh button
 function manualRefresh() {
-    htmx.trigger(".messages", "manual_refresh", {})
+    htmx.trigger("#messages", "manual_refresh", {});
+    htmx.trigger("#packets", "manual_refresh", {});
 }
 
 // scroll to bottom button
 function jumpToLastMsg() {
-    document.querySelector("#message_" + getMsgId()).scrollIntoView();
-    document.querySelector("#packet_" + getPktId()).scrollIntoView();
+    var msg_id = getLastMsgId();
+    if (msg_id > 0) {
+        document.querySelector("#message_" + msg_id).scrollIntoView();
+    }
+    var pkt_id = getLastPktId();
+    if (pkt_id > 0) {
+        document.querySelector("#packet_" + pkt_id).scrollIntoView();
+    }
 }
 
 // switch tabs
