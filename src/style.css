@@ -32,65 +32,64 @@ header {
     min-height: 0;
     overflow: hidden;
 
+    border: var(--pico-border-width) solid var(--pico-contrast-border);
+    border-top-width: 0;
+    border-radius: 0 0 0.625rem 0.625rem;
+
     .messages {
-        border: var(--pico-border-width) solid var(--pico-contrast-border);
-        border-top-width: 0;
-
-        border-radius: 0 0 0.625rem 0.625rem;
-        padding: 1.25rem;
-
         display: flex;
         flex-direction: column-reverse;
         flex: 1;
-
         overflow-y: auto;
+
+        padding: 1.25rem;
+
+        .date-bubble {
+            display: flex;
+            justify-content: center;
+            margin-top: var(--pico-spacing);
+        }
+
+        .msg-div {
+            display: flex;
+
+            .msg-avatar {
+                background: var(--pico-primary-background);
+                width: 2.5rem;
+                height: 2.5rem;
+                border-radius: 50%;
+                margin: var(--pico-spacing);
+                margin-left: 0;
+
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                aspect-ratio: 1/1;
+                align-self: end;
+            }
+
+            .msg-bubble {
+                border-radius: 2rem 2rem 2rem var(--pico-border-radius);
+                margin-bottom: 0;
+                overflow: hidden;
+            }
+        }
+
+        .pkt-div {
+            .pkt-avatar {
+                border-radius: 0.5rem;
+                margin-right: 0.5rem;
+            }
+        }
+
+        .bubble-date {
+            font-size: x-small;
+            color: var(--pico-secondary);
+            margin: 0.5rem 0.5rem 0 1rem;
+            float: right;
+            text-wrap: nowrap;
+        }
     }
-}
-
-.date-bubble {
-    display: flex;
-    justify-content: center;
-    margin-top: var(--pico-spacing);
-}
-
-.msg-div {
-    display: flex;
-
-    .msg-avatar {
-        background: var(--pico-primary-background);
-        width: 2.5rem;
-        height: 2.5rem;
-        border-radius: 50%;
-        margin: var(--pico-spacing);
-        margin-left: 0;
-
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        aspect-ratio: 1/1;
-        align-self: end;
-    }
-
-    .msg-bubble {
-        border-radius: 2rem 2rem 2rem var(--pico-border-radius);
-        margin-bottom: 0;
-        overflow: hidden;
-    }
-}
-
-.pkt-div {
-    .pkt-avatar {
-        border-radius: 0.5rem;
-        margin-right: 0.5rem;
-    }
-}
-
-.bubble-date {
-    font-size: x-small;
-    color: var(--pico-secondary);
-    margin: 0.5rem 0.5rem 0 1rem;
-    float: right;
-    text-wrap: nowrap;
 }
 
 footer {
