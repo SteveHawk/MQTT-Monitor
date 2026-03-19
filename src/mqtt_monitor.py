@@ -130,7 +130,7 @@ class MQTTMonitor:
             logger.exception(f"Packet parse error: {msg.payload!r}")
 
     @classmethod
-    def process_message(self, msg: bytes, key: str) -> dict[str, Any]:
+    def process_message(cls, msg: bytes, key: str) -> dict[str, Any]:
         # Get message
         service_envelope = mqtt_pb2.ServiceEnvelope()
         service_envelope.ParseFromString(msg)
@@ -138,11 +138,11 @@ class MQTTMonitor:
 
         # Decrypt and decode
         if packet.HasField("encrypted") and not packet.HasField("decoded"):
-            self.decode_encrypted(packet, key)
-        payload = self.decode_payload(packet)
+            cls.decode_encrypted(packet, key)
+        payload = cls.decode_payload(packet)
 
         # Parse into dict
-        return self.to_dict(packet, payload)
+        return cls.to_dict(packet, payload)
 
     @staticmethod
     def decode_encrypted(packet: mesh_pb2.MeshPacket, key: str) -> None:
