@@ -279,7 +279,9 @@ class SQLiteStore:
     def fetch_latest_messages(self, count: int) -> list[Packet]:
         with self.con:
             results: list[sqlite3.Row] = self.con.execute(
-                "SELECT * FROM packets ORDER BY msg_id DESC LIMIT ?", (count,)
+                "SELECT * FROM packets WHERE msg_id IS NOT NULL"
+                " ORDER BY msg_id DESC LIMIT ?",
+                (count,),
             ).fetchall()
         return [Packet(**r) for r in results][::-1]
 
