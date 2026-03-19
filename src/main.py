@@ -26,12 +26,14 @@ from starlette.applications import Starlette
 from .mqtt_monitor import MQTTMonitor
 from .packet_store import Packet
 
-mqtt_monitor = MQTTMonitor()
+mqtt_monitor: MQTTMonitor
 
 
 @contextlib.asynccontextmanager
 async def mqttc_lifespan(app: Starlette) -> AsyncGenerator[None, None]:
     """Lifespan handler, run mqtt_monitor thread here seperately."""
+    global mqtt_monitor
+    mqtt_monitor = MQTTMonitor()
     with mqtt_monitor.start():
         yield
 
@@ -200,4 +202,4 @@ def fetch_messages(current_id: int, text_only: bool) -> list[ft.FT]:
 
 
 if __name__ == "__main__":
-    ft.serve(reload=False)
+    ft.serve(reload=False, appname="src.main")
