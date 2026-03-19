@@ -85,6 +85,15 @@ header {
                 border-radius: 0.5rem;
                 margin-right: 0.5rem;
             }
+
+            .portnum {
+                border: var(--pico-border-width) solid var(--pico-muted-color);
+                border-radius: 0.5rem;
+                padding-left: 4px;
+                padding-right: 4px;
+                margin-left: 0.5rem;
+                font-size: x-small;
+            }
         }
 
         .bubble-date {

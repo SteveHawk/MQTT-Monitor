@@ -86,6 +86,7 @@ def gen_message_ui(packets: list[Packet], text_only: bool) -> list[ft.FT]:
                 Div(
                     Mark(Small(user["short_name"]), cls="pkt-avatar"),
                     Small(f"{user['long_name']} -> {uer_to['long_name']}"),
+                    Small(pkt.portnum, cls="portnum"),
                 ),
                 Code(str(pkt), timestamp, id=f"packet_{pkt.pkt_id}"),
                 cls="pkt-div",
