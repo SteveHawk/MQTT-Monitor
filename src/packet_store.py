@@ -104,30 +104,33 @@ class Packet:
     @classmethod
     def _pb_to_dict(cls, packet: google.protobuf.message.Message) -> dict[str, Any]:
         """Convert google.protobuf.message.Message to dictionary."""
+
+        def type_handle(val: Any) -> Any:
+            if isinstance(val, (str, int, float)):
+                return val
+            elif isinstance(val, google.protobuf.message.Message):
+                return cls._pb_to_dict(val)
+            elif isinstance(val, bytes):
+                if desc.name == "macaddr":
+                    _mac = val.hex()
+                    return ":".join([_mac[i : i + 2] for i in range(0, len(_mac), 2)])
+                elif desc.name == "public_key":
+                    return base64.b64encode(val).decode()
+                else:
+                    if desc.name != "payload":
+                        logger.warning(f"New bytes type: {desc.name=} {val=}")
+                    return str(val)
+            elif isinstance(val, Sequence):  # RepeatedScalarContainer, etc
+                return [type_handle(v) for v in list(val)]
+            else:
+                logger.warning(f"New data type: {desc.name=} {type(val)=} {val=}")
+                return str(val)
+
         result = dict[str, Any]()
         for desc, val in packet.ListFields():
             if enum_type := desc.enum_type:  # Use enum name instead of value
                 val = enum_type.values_by_number[val].name
-            if isinstance(val, (str, int, float)):
-                result[desc.name] = val
-            elif isinstance(val, google.protobuf.message.Message):
-                result[desc.name] = cls._pb_to_dict(val)
-            elif isinstance(val, bytes):
-                if desc.name == "macaddr":
-                    _mac = val.hex()
-                    mac = ":".join([_mac[i : i + 2] for i in range(0, len(_mac), 2)])
-                    result[desc.name] = mac
-                elif desc.name == "public_key":
-                    result[desc.name] = base64.b64encode(val).decode()
-                else:
-                    if desc.name != "payload":
-                        logger.warning(f"New bytes type: {desc.name=} {val=}")
-                    result[desc.name] = str(val)
-            elif isinstance(val, Sequence):  # RepeatedScalarContainer
-                result[desc.name] = list(val)
-            else:
-                logger.warning(f"New data type: {desc.name=} {type(val)=} {val=}")
-                result[desc.name] = str(val)
+            result[desc.name] = type_handle(val)
         return result
 
 
