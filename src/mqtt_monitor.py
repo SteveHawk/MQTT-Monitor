@@ -25,10 +25,8 @@ class Settings(BaseSettings):
         str, AfterValidator(lambda k: "1PG7OiApB1nwvP+rz05pAQ==" if k == "AQ==" else k)
     ] = "AQ=="
 
-    packet_keep_days: int = 30
     packet_keep_count: int = 5000
     message_keep_days: int = 30
-    message_keep_count: int = 5000
 
     model_config = SettingsConfigDict(env_prefix="mqtt_monitor_")
 
@@ -96,12 +94,7 @@ class MQTTMonitor:
         while not self.shutdown_event.wait(3600):
             with self.packet_store.thread_sql_store():
                 logger.info("Running packets cleanup.")
-                self.packet_store.cleanup(
-                    _s.packet_keep_days,
-                    _s.packet_keep_count,
-                    _s.message_keep_days,
-                    _s.message_keep_count,
-                )
+                self.packet_store.cleanup(_s.packet_keep_count, _s.message_keep_days)
 
     def on_connect(
         self,

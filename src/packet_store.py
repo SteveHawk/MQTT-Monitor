@@ -138,9 +138,11 @@ class SQLiteStore:
         self.con.row_factory = sqlite3.Row
 
     def close(self) -> None:
+        """Close connection to sqlite."""
         self.con.close()
 
     def init_tables(self) -> None:
+        """Initialize tables and insert defaut data."""
         with self.con:
             self.con.execute(
                 "CREATE TABLE IF NOT EXISTS packets(pkt_id INTEGER PRIMARY KEY,"
@@ -156,6 +158,7 @@ class SQLiteStore:
             )
 
     def insert_nodeinfo(self, node_info: dict[str, str | int]) -> None:
+        """Insert a nodeinfo packet."""
         with self.con:
             self.con.execute(
                 "INSERT INTO nodedb VALUES(:node_num, :id, :long_name, :short_name)"
@@ -165,6 +168,7 @@ class SQLiteStore:
             )
 
     def fetch_nodeinfo(self, node_num: int) -> dict[str, str | int]:
+        """Fetch a nodeinfo for a certain node_num."""
         with self.con:
             result: sqlite3.Row = self.con.execute(
                 "SELECT * FROM nodedb WHERE node_num=?", (node_num,)
@@ -172,6 +176,7 @@ class SQLiteStore:
         return dict(result)
 
     def fetch_nodedb(self) -> dict[int, dict[str, str | int]]:
+        """Fetch the entire nodedb."""
         with self.con:
             results: list[sqlite3.Row] = self.con.execute(
                 "SELECT * FROM nodedb"
@@ -179,6 +184,7 @@ class SQLiteStore:
         return {r["node_num"]: dict(r) for r in results}
 
     def insert_packet(self, packet: Packet) -> None:
+        """Insert a packet to packets table."""
         with self.con:
             self.con.execute(
                 "INSERT INTO packets VALUES"
@@ -187,6 +193,7 @@ class SQLiteStore:
             )
 
     def fetch_new_packets(self, pkt_id: int) -> list[Packet]:
+        """Fetch new packets since pkt_id."""
         with self.con:
             results: list[sqlite3.Row] = self.con.execute(
                 "SELECT * FROM packets WHERE pkt_id>? ORDER BY pkt_id ASC", (pkt_id,)
@@ -194,6 +201,7 @@ class SQLiteStore:
         return [Packet(**r) for r in results]
 
     def fetch_old_packets(self, pkt_id: int, count: int) -> list[Packet]:
+        """Fetch <count> packets older than pkt_id."""
         with self.con:
             results: list[sqlite3.Row] = self.con.execute(
                 "SELECT * FROM packets WHERE pkt_id<? ORDER BY pkt_id DESC LIMIT ?",
@@ -202,6 +210,7 @@ class SQLiteStore:
         return [Packet(**r) for r in results][::-1]
 
     def fetch_latest_packets(self, count: int) -> list[Packet]:
+        """Fetch the latest <count> packets."""
         with self.con:
             results: list[sqlite3.Row] = self.con.execute(
                 "SELECT * FROM packets ORDER BY pkt_id DESC LIMIT ?", (count,)
@@ -209,6 +218,7 @@ class SQLiteStore:
         return [Packet(**r) for r in results][::-1]
 
     def fetch_new_messages(self, msg_id: int) -> list[Packet]:
+        """Fetch new messages since msg_id."""
         with self.con:
             results: list[sqlite3.Row] = self.con.execute(
                 "SELECT * FROM packets WHERE msg_id>? ORDER BY msg_id ASC", (msg_id,)
@@ -216,6 +226,7 @@ class SQLiteStore:
         return [Packet(**r) for r in results]
 
     def fetch_old_messages(self, msg_id: int, count: int) -> list[Packet]:
+        """Fetch <count> messages older than msg_id."""
         with self.con:
             results: list[sqlite3.Row] = self.con.execute(
                 "SELECT * FROM packets WHERE msg_id<? ORDER BY msg_id DESC LIMIT ?",
@@ -224,6 +235,7 @@ class SQLiteStore:
         return [Packet(**r) for r in results][::-1]
 
     def fetch_latest_messages(self, count: int) -> list[Packet]:
+        """Fetch the latest <count> messages."""
         with self.con:
             results: list[sqlite3.Row] = self.con.execute(
                 "SELECT * FROM packets WHERE msg_id IS NOT NULL"
@@ -232,25 +244,22 @@ class SQLiteStore:
             ).fetchall()
         return [Packet(**r) for r in results][::-1]
 
-    def cleanup_packets(self, keep_days: int, keep_count: int) -> None:
-        time_thresh = int(time.time()) - keep_days * 86400
+    def cleanup_packets(self, keep_count: int) -> None:
+        """Cleanup packets out of keep count."""
         with self.con:
             self.con.execute(
-                "DELETE FROM packets WHERE pkt_id IN ("
-                "SELECT pkt_id FROM packets WHERE msg_id IS NULL"
-                " ORDER BY pkt_id DESC LIMIT -1 OFFSET ?"
-                ") AND timestamp<?",
-                (keep_count, time_thresh),
+                "DELETE FROM packets WHERE msg_id IS NULL"
+                " ORDER BY pkt_id DESC LIMIT -1 OFFSET ?",
+                (keep_count,),
             )
 
-    def cleanup_messages(self, keep_days: int, keep_count: int) -> None:
+    def cleanup_messages(self, keep_days: int) -> None:
+        """Cleanup messages older than keep days."""
         time_thresh = int(time.time()) - keep_days * 86400
         with self.con:
             self.con.execute(
-                "DELETE FROM packets WHERE msg_id IN ("
-                "SELECT msg_id FROM packets ORDER BY msg_id DESC LIMIT -1 OFFSET ?"
-                ") AND timestamp<?",
-                (keep_count, time_thresh),
+                "DELETE FROM packets WHERE msg_id IS NOT NULL AND timestamp<?",
+                (time_thresh,),
             )
 
 
@@ -400,12 +409,6 @@ class PacketStore:
     def fetch_nodeinfo(self, node_num: int) -> dict[str, str | int]:
         return self.node_db[node_num]
 
-    def cleanup(
-        self,
-        pkt_keep_days: int,
-        pkt_keep_count: int,
-        msg_keep_days: int,
-        msg_keep_count: int,
-    ) -> None:
-        self.sql_store.cleanup_packets(pkt_keep_days, pkt_keep_count)
-        self.sql_store.cleanup_messages(msg_keep_days, msg_keep_count)
+    def cleanup(self, pkt_keep_count: int, msg_keep_days: int) -> None:
+        self.sql_store.cleanup_packets(pkt_keep_count)
+        self.sql_store.cleanup_messages(msg_keep_days)

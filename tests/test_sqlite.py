@@ -146,5 +146,5 @@ def test_packets(
 
 
 def test_packets_cleanup(sql_store_full: SQLiteStore) -> None:
-    sql_store_full.cleanup_packets(10, 100)
-    sql_store_full.cleanup_messages(10, 100)
+    sql_store_full.cleanup_packets(100)
+    sql_store_full.cleanup_messages(10)
