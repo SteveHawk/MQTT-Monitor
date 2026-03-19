@@ -3,15 +3,20 @@ function getMsgId() {
     var msgs = [...document.querySelectorAll("#messages [id]")];
     return msgs.length === 0 ? 0 : msgs[0].id.split("_")[1];
 }
+function getPktId() {
+    var msgs = [...document.querySelectorAll("#packets [id]")];
+    return msgs.length === 0 ? 0 : msgs[0].id.split("_")[1];
+}
 
 // refresh button
 function manualRefresh() {
-    htmx.trigger("#messages", "manual_refresh", {})
+    htmx.trigger(".messages", "manual_refresh", {})
 }
 
 // scroll to bottom button
 function jumpToLastMsg() {
     document.querySelector("#message_" + getMsgId()).scrollIntoView();
+    document.querySelector("#packet_" + getPktId()).scrollIntoView();
 }
 
 // switch tabs

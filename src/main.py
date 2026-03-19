@@ -139,7 +139,7 @@ def home() -> tuple[ft.FT, ...]:
                     cls="messages",
                     hx_get="/fetch-messages",  # fetch new message
                     hx_trigger="sse:new_packet, manual_refresh",  # trigger fetch new packets
-                    hx_vals="js:{current_id: getMsgId(), text_only: false}",  # calculate current_id to avoid missing messages
+                    hx_vals="js:{current_id: getPktId(), text_only: false}",  # calculate current_id to avoid missing messages
                     hx_target="this",
                     hx_swap="afterbegin show:bottom",
                     hidden=True,
