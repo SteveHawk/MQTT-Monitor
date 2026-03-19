@@ -248,8 +248,9 @@ class SQLiteStore:
         """Cleanup packets out of keep count."""
         with self.con:
             self.con.execute(
-                "DELETE FROM packets WHERE msg_id IS NULL"
-                " ORDER BY pkt_id DESC LIMIT -1 OFFSET ?",
+                "DELETE FROM packets WHERE pkt_id IN ("
+                "SELECT pkt_id FROM packets WHERE msg_id IS NULL"
+                " ORDER BY pkt_id DESC LIMIT -1 OFFSET ?)",
                 (keep_count,),
             )
 

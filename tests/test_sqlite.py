@@ -85,7 +85,7 @@ def sql_store_packets() -> tuple[list[Packet], list[Packet]]:
             },
             False,
             False,
-            int(time.time()) - (10 - i) * 86401,
+            int(time.time()) - (10 - msg_id) * 86401,
         )
         packets.append(p)
         messages.append(p)
@@ -145,6 +145,32 @@ def test_packets(
     assert messages[-1:] == sql_store_full.fetch_latest_messages(1)
 
 
-def test_packets_cleanup(sql_store_full: SQLiteStore) -> None:
-    sql_store_full.cleanup_packets(100)
+def test_packets_cleanup(
+    sql_store_full: SQLiteStore, sql_store_packets: tuple[list[Packet], list[Packet]]
+) -> None:
+    packets, _ = sql_store_packets
+
+    sql_store_full.cleanup_packets(7000)
+    sql_store_full.cleanup_packets(10)
+    assert sql_store_full.fetch_new_packets(0) == packets
+
+    packets = list(filter(lambda p: not p.is_text, packets))
+
+    sql_store_full.cleanup_packets(7)
+
+    new_packets = sql_store_full.fetch_new_packets(0)
+    new_packets = list(filter(lambda p: not p.is_text, new_packets))
+    assert new_packets == packets[-7:]
+
+
+def test_messages_cleanup(
+    sql_store_full: SQLiteStore, sql_store_packets: tuple[list[Packet], list[Packet]]
+) -> None:
+    _, messages = sql_store_packets
+
+    sql_store_full.cleanup_messages(10000)
     sql_store_full.cleanup_messages(10)
+    assert sql_store_full.fetch_new_messages(0) == messages
+
+    sql_store_full.cleanup_messages(4)
+    assert sql_store_full.fetch_new_messages(0) == messages[-4:]
