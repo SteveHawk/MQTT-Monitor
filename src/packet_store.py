@@ -19,7 +19,7 @@ class Packet:
         timestamp: int | None = None,
     ) -> None:
         self.packet = packet if isinstance(packet, dict) else json.loads(packet)
-        _decoded = self.packet["decoded"]
+        _decoded = self.packet.get("decoded", {})
         self.payload: dict[str, Any] | str | None = _decoded.get("payload")
         self.portnum: str | None = _decoded.get("portnum")
         self.is_text = bool(self.portnum == "TEXT_MESSAGE_APP")

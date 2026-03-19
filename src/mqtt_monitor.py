@@ -151,6 +151,8 @@ class MQTTMonitor:
             # Parse message
             packet_dict = self.process_message(msg.payload, userdata.key)
             packet = Packet(*self.packet_store.new_id(), packet_dict)
+            if "decoded" not in packet.packet:
+                return
             logger.info(f"{msg.topic}: [{packet.pkt_id}][{packet.msg_id}] {packet}")
 
             # Insert into ring buffer
@@ -158,7 +160,7 @@ class MQTTMonitor:
                 self.packet_store.append(packet)
 
         except Exception:
-            logger.exception(f"Packet parse error: {msg.payload!r}")
+            logger.error(f"Packet parse error: {msg.topic}: {msg.payload!r}")
 
     @classmethod
     def process_message(cls, msg: bytes, key: str) -> dict[str, Any]:
