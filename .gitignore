@@ -13,4 +13,4 @@ wheels/
 .sesskey
 
 # Data files
-mqtt-monitor.db
+mqtt-monitor.db*

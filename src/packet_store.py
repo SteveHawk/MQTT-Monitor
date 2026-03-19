@@ -1,10 +1,12 @@
+import base64
+import contextlib
 import json
 import sqlite3
 import threading
 import time
 from collections import deque
 from datetime import datetime
-from typing import Any, Iterable, Self
+from typing import Any, Generator, Iterable, Self
 
 import google.protobuf.message
 from meshtastic.protobuf import mesh_pb2, telemetry_pb2
@@ -37,7 +39,7 @@ class Packet:
         self.is_text = bool(self.portnum == "TEXT_MESSAGE_APP")
 
         self.pkt_id = pkt_id
-        self.msg_id = msg_id if self.is_text else None
+        self.msg_id = msg_id if self.is_text else -1
 
         self.pkt_new_day = pkt_new_day
         self.msg_new_day = msg_new_day
@@ -53,7 +55,7 @@ class Packet:
             _pkt = json.dumps(self.packet, separators=(",", ":"))
         return {
             "pkt_id": self.pkt_id,
-            "msg_id": self.msg_id,
+            "msg_id": self.msg_id if self.msg_id > 0 else None,
             "packet": _pkt,
             "pkt_new_day": self.pkt_new_day,
             "msg_new_day": self.msg_new_day,
@@ -105,16 +107,34 @@ class Packet:
         for desc, val in packet.ListFields():
             if enum_type := desc.enum_type:  # Use enum name instead of value
                 val = enum_type.values_by_number[val].name
-            result[desc.name] = val
-            if isinstance(val, google.protobuf.message.Message):
+            if isinstance(val, (str, int, float)):
+                result[desc.name] = val
+            elif isinstance(val, google.protobuf.message.Message):
                 result[desc.name] = cls._pb_to_dict(val)
+            elif isinstance(val, bytes):
+                if desc.name == "macaddr":
+                    _mac = val.hex()
+                    mac = ":".join([_mac[i : i + 2] for i in range(0, len(_mac), 2)])
+                    result[desc.name] = mac
+                elif desc.name == "public_key":
+                    result[desc.name] = base64.b64encode(val).decode()
+                else:
+                    # TODO: more bytes type
+                    print(f"New bytes: {desc.name=} {val=}")
+                    result[desc.name] = str(val)
+            else:
+                # TODO: more types
+                print(f"{desc.name=} {type(val)=} {val=}")
+                result[desc.name] = str(val)
         return result
 
 
 class RingBuffer:
-    def __init__(self, max_len: int = 128, max_id: int = 0) -> None:
-        self.deque = deque[Packet](maxlen=max_len)
-        self.max_id: int = max_id
+    def __init__(
+        self, packets: list[Packet] = [], max_len: int = 128, max_id: int = 0
+    ) -> None:
+        self.deque = deque[Packet](packets, maxlen=max_len)
+        self.max_id = max_id
         self.condition = threading.Condition()
 
     def append(self, packet: Packet, max_id: int) -> None:
@@ -172,6 +192,10 @@ class SQLiteStore:
         self.con = sqlite3.connect("mqtt-monitor.db", autocommit=False)
         self.con.row_factory = sqlite3.Row
 
+    def close(self) -> None:
+        self.con.close()
+
+    def init_tables(self) -> None:
         with self.con:
             self.con.execute(
                 "CREATE TABLE IF NOT EXISTS packets(pkt_id INTEGER PRIMARY KEY,"
@@ -183,10 +207,8 @@ class SQLiteStore:
             )
             self.con.execute(
                 "INSERT INTO nodedb VALUES(0xFFFFFFFF, 'Broadcast', 'Broadcast 📢', '📢')"
+                " ON CONFLICT(node_num) DO NOTHING"
             )
-
-    def close(self) -> None:
-        self.con.close()
 
     def insert_nodeinfo(self, node_info: dict[str, str | int]) -> None:
         with self.con:
@@ -198,13 +220,17 @@ class SQLiteStore:
             )
 
     def fetch_nodeinfo(self, node_num: int) -> dict[str, str | int]:
-        result: sqlite3.Row = self.con.execute(
-            "SELECT * FROM nodedb WHERE node_num=?", (node_num,)
-        ).fetchone()
+        with self.con:
+            result: sqlite3.Row = self.con.execute(
+                "SELECT * FROM nodedb WHERE node_num=?", (node_num,)
+            ).fetchone()
         return dict(result)
 
     def fetch_nodedb(self) -> dict[int, dict[str, str | int]]:
-        results: list[sqlite3.Row] = self.con.execute("SELECT * FROM nodedb").fetchall()
+        with self.con:
+            results: list[sqlite3.Row] = self.con.execute(
+                "SELECT * FROM nodedb"
+            ).fetchall()
         return {r["node_num"]: dict(r) for r in results}
 
     def insert_packet(self, packet: Packet) -> None:
@@ -216,39 +242,92 @@ class SQLiteStore:
             )
 
     def fetch_new_packets(self, pkt_id: int) -> list[Packet]:
-        results: list[sqlite3.Row] = self.con.execute(
-            "SELECT * FROM packets WHERE pkt_id>?", (pkt_id,)
-        ).fetchall()
+        with self.con:
+            results: list[sqlite3.Row] = self.con.execute(
+                "SELECT * FROM packets WHERE pkt_id>?", (pkt_id,)
+            ).fetchall()
         return [Packet(**r) for r in results]
 
     def fetch_old_packets(self, pkt_id: int, count: int) -> list[Packet]:
-        results: list[sqlite3.Row] = self.con.execute(
-            "SELECT * FROM packets WHERE pkt_id<? LIMIT ?", (pkt_id, count)
-        ).fetchall()
+        with self.con:
+            results: list[sqlite3.Row] = self.con.execute(
+                "SELECT * FROM packets WHERE pkt_id<? LIMIT ?", (pkt_id, count)
+            ).fetchall()
         return [Packet(**r) for r in results]
 
+    def fetch_latest_packets(self, count: int) -> list[Packet]:
+        with self.con:
+            results: list[sqlite3.Row] = self.con.execute(
+                "SELECT * FROM packets ORDER BY pkt_id DESC LIMIT ?", (count,)
+            ).fetchall()
+        return [Packet(**r) for r in results][::-1]
+
     def fetch_new_messages(self, msg_id: int) -> list[Packet]:
-        results: list[sqlite3.Row] = self.con.execute(
-            "SELECT * FROM packets WHERE msg_id>?", (msg_id,)
-        ).fetchall()
+        with self.con:
+            results: list[sqlite3.Row] = self.con.execute(
+                "SELECT * FROM packets WHERE msg_id>?", (msg_id,)
+            ).fetchall()
         return [Packet(**r) for r in results]
 
     def fetch_old_messages(self, msg_id: int, count: int) -> list[Packet]:
-        results: list[sqlite3.Row] = self.con.execute(
-            "SELECT * FROM packets WHERE msg_id<? LIMIT ?", (msg_id, count)
-        ).fetchall()
+        with self.con:
+            results: list[sqlite3.Row] = self.con.execute(
+                "SELECT * FROM packets WHERE msg_id<? LIMIT ?", (msg_id, count)
+            ).fetchall()
         return [Packet(**r) for r in results]
+
+    def fetch_latest_messages(self, count: int) -> list[Packet]:
+        with self.con:
+            results: list[sqlite3.Row] = self.con.execute(
+                "SELECT * FROM packets ORDER BY msg_id DESC LIMIT ?", (count,)
+            ).fetchall()
+        return [Packet(**r) for r in results][::-1]
 
 
 class PacketStore:
     def __init__(self) -> None:
-        self.pkt_ring = RingBuffer()
-        self.msg_ring = RingBuffer()
-        self.sql_store = SQLiteStore()
+        self.sql_store = SQLiteStore()  # SQLite connection for the main thread
+        self.sql_store.init_tables()  # Only run init in main thread
+        self.sql_store_t = dict[int, SQLiteStore]()  # SQLite conn for different threads
+
+        # Prefill rings
+        self.pkt_ring = RingBuffer(
+            (_pkts := self.sql_store.fetch_latest_packets(30)),
+            max_id=_pkts[-1].pkt_id if _pkts else 0,
+        )
+        self.msg_ring = RingBuffer(
+            (_pkts := self.sql_store.fetch_latest_messages(30)),
+            max_id=_pkts[-1].msg_id if _pkts else 0,
+        )
+
+        # Sync nodedb
         self.node_db = self.sql_store.fetch_nodedb()
 
     def close(self) -> None:
+        """Close the main SQLite connection."""
         self.sql_store.close()
+
+    def thread_init(self) -> None:
+        """Initialize a new SQLite connection for current thread."""
+        if (ident := threading.get_ident()) in self.sql_store_t:
+            return
+        self.sql_store_t[ident] = SQLiteStore()
+
+    def thread_close(self) -> None:
+        """Close the SQLite connection for current thread."""
+        if (ident := threading.get_ident()) not in self.sql_store_t:
+            return
+        self.sql_store_t.pop(ident).close()
+
+    @contextlib.contextmanager
+    def thread_sql_store(self) -> Generator[None]:
+        """Switch to the SQLite connection for this thread."""
+        try:
+            _ori = self.sql_store
+            self.sql_store = self.sql_store_t[threading.get_ident()]
+            yield
+        finally:
+            self.sql_store = _ori
 
     def append(self, packet: Packet) -> None:
         """Append a new Packet."""
@@ -264,7 +343,6 @@ class PacketStore:
         self.sql_store.insert_packet(packet)
         self.pkt_ring.append(packet, packet.pkt_id)
         if packet.is_text:
-            assert packet.msg_id is not None
             self.msg_ring.append(packet, packet.msg_id)
 
     def new_id(self) -> tuple[int, int]:

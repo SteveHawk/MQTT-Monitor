@@ -33,11 +33,12 @@ class MQTTMonitor:
         self.mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, userdata=settings)
         self.mqttc.on_connect = self.on_connect
         self.mqttc.on_message = self.on_message
+        self.mqttc.on_disconnect = self.on_disconnect
 
         self.mqttc.connect_async(settings.address, 1883, 60)
         self.mqttc.username_pw_set(settings.username, settings.password)
 
-        self.packet_store = PacketStore()
+        self.packet_store: PacketStore
 
     def loop_forever(self) -> None:
         """Start MQTT server, blocking."""
@@ -52,6 +53,7 @@ class MQTTMonitor:
     def start(self) -> Generator[None]:
         self.mqttc.loop_start()
 
+        self.packet_store = PacketStore()
         with contextlib.closing(self.packet_store):
             yield
 
@@ -59,8 +61,8 @@ class MQTTMonitor:
         self.mqttc.loop_stop()
         logger.info("MQTT disconnected.")
 
-    @staticmethod
     def on_connect(
+        self,
         client: mqtt.Client,
         userdata: Settings,
         flags: mqtt.ConnectFlags,
@@ -73,10 +75,30 @@ class MQTTMonitor:
         else:
             logger.success(f"MQTT connected with reason code `{reason_code}`")
 
+        # Init SQLite connection for this thread
+        self.packet_store.thread_init()
+
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
         # About topic name: https://meshtastic.org/docs/software/integrations/mqtt/
         client.subscribe(f"{userdata.root_topic}/2/e/{userdata.channel}/#")
+
+    def on_disconnect(
+        self,
+        client: mqtt.Client,
+        userdata: Settings,
+        flags: mqtt.DisconnectFlags,
+        reason_code: mqtt.ReasonCode,
+        properties: mqtt.Properties | None,
+    ) -> None:
+        """The callback called when the client disconnects from the broker."""
+        if reason_code.is_failure:
+            logger.error(f"MQTT disconnected with reason code `{reason_code}`")
+        else:
+            logger.success(f"MQTT disconnected with reason code `{reason_code}`")
+
+        # Close SQLite connection for this thread
+        self.packet_store.thread_close()
 
     def on_message(
         self, client: mqtt.Client, userdata: Settings, msg: mqtt.MQTTMessage
@@ -94,10 +116,11 @@ class MQTTMonitor:
             payload = self.decode_payload(packet)
 
             # Pack into ring buffer
-            message = Packet.from_mesh_packet(
-                self.packet_store.new_id(), packet, payload
-            )
-            self.packet_store.append(message)
+            with self.packet_store.thread_sql_store():
+                message = Packet.from_mesh_packet(
+                    self.packet_store.new_id(), packet, payload
+                )
+                self.packet_store.append(message)
 
             logger.info(f"{msg.topic}: [{message.pkt_id}][{message.msg_id}] {message}")
 
