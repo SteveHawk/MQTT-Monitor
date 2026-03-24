@@ -63,6 +63,7 @@ def sql_store_packets() -> tuple[list[Packet], list[Packet]]:
                     "payload": {"location_source": "LOC_MANUAL"},
                     "bitfield": 0,
                 },
+                "id": i,
             },
             False,
             False,
@@ -82,6 +83,7 @@ def sql_store_packets() -> tuple[list[Packet], list[Packet]]:
                     "payload": f"{msg_id} Test message hello 73",
                     "bitfield": 0,
                 },
+                "id": i + 1,
             },
             False,
             False,
@@ -143,6 +145,20 @@ def test_packets(
     assert messages != sql_store_full.fetch_latest_messages(9)
     assert messages[-5:] == sql_store_full.fetch_latest_messages(5)
     assert messages[-1:] == sql_store_full.fetch_latest_messages(1)
+
+
+def test_dedup(
+    sql_store_full: SQLiteStore, sql_store_packets: tuple[list[Packet], list[Packet]]
+) -> None:
+    packets, messages = sql_store_packets
+
+    for p in packets:
+        assert sql_store_full.exist_mesh_id(p.mesh_id)
+    for m in messages:
+        assert sql_store_full.exist_mesh_id(m.mesh_id)
+
+    assert not sql_store_full.exist_mesh_id(21)
+    assert not sql_store_full.exist_mesh_id(random.randint(100, 100000))
 
 
 def test_packets_cleanup(

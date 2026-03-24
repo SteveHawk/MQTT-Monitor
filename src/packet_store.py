@@ -26,6 +26,7 @@ class Packet:
 
         self.pkt_id = pkt_id
         self.msg_id = msg_id if self.is_text else -1
+        self.mesh_id: int = self.packet.get("id", -1)
 
         self.pkt_new_day = pkt_new_day
         self.msg_new_day = msg_new_day
@@ -183,6 +184,15 @@ class SQLiteStore:
             ).fetchall()
         return {r["node_num"]: dict(r) for r in results}
 
+    def exist_mesh_id(self, mesh_id: int) -> bool:
+        """Check if mesh id exist in packets table."""
+        with self.con:
+            result: sqlite3.Row = self.con.execute(
+                "SELECT EXISTS (SELECT 1 FROM packets WHERE packet ->> '$.id' = ?)",
+                (mesh_id,),
+            ).fetchone()
+        return bool(result[0])
+
     def insert_packet(self, packet: Packet) -> None:
         """Insert a packet to packets table."""
         with self.con:
@@ -308,6 +318,10 @@ class PacketStore:
             yield
         finally:
             self.sql_store = _ori
+
+    def has_duplicate(self, packet_dict: dict[str, Any]) -> bool:
+        """Packet de-duplication."""
+        return self.sql_store.exist_mesh_id(packet_dict["id"])
 
     def append(self, packet: Packet) -> None:
         """Append a new Packet."""

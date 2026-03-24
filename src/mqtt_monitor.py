@@ -150,9 +150,16 @@ class MQTTMonitor:
         try:
             # Parse message
             packet_dict = self.process_message(msg.payload, userdata.key)
-            packet = Packet(*self.packet_store.new_id(), packet_dict)
-            if "decoded" not in packet.packet:
+
+            # Ignore empty message
+            if "decoded" not in packet_dict:
                 return
+            # Dedup check
+            if self.packet_store.has_duplicate(packet_dict):
+                return
+
+            # Assign internal pkt_id and msg_id, instantiate Packet object
+            packet = Packet(*self.packet_store.new_id(), packet_dict)
             logger.info(f"{msg.topic}: [{packet.pkt_id}][{packet.msg_id}] {packet}")
 
             # Insert into ring buffer
