@@ -155,8 +155,9 @@ class MQTTMonitor:
             if "decoded" not in packet_dict:
                 return
             # Dedup check
-            if self.packet_store.has_duplicate(packet_dict):
-                return
+            with self.packet_store.thread_sql_store():
+                if self.packet_store.has_duplicate(packet_dict):
+                    return
 
             # Assign internal pkt_id and msg_id, instantiate Packet object
             packet = Packet(*self.packet_store.new_id(), packet_dict)
