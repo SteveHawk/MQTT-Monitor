@@ -147,15 +147,17 @@ def test_packets(
     assert messages[-1:] == sql_store_full.fetch_latest_messages(1)
 
 
-def test_dedup(
+def test_meshid(
     sql_store_full: SQLiteStore, sql_store_packets: tuple[list[Packet], list[Packet]]
 ) -> None:
     packets, messages = sql_store_packets
 
     for p in packets:
         assert sql_store_full.exist_mesh_id(p.mesh_id)
+        assert p == sql_store_full.fetch_packet_mesh_id(p.mesh_id)
     for m in messages:
         assert sql_store_full.exist_mesh_id(m.mesh_id)
+        assert m == sql_store_full.fetch_packet_mesh_id(m.mesh_id)
 
     assert not sql_store_full.exist_mesh_id(21)
     assert not sql_store_full.exist_mesh_id(random.randint(100, 100000))

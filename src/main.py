@@ -52,7 +52,7 @@ app, rt = ft.fast_app(
 )
 
 
-def gen_message_ui(packets: list[Packet], text_only: bool) -> list[ft.FT]:
+async def gen_message_ui(packets: list[Packet], text_only: bool) -> list[ft.FT]:
     """Generate message list UI. pkt_id/msg_id should be sorted in ascending order."""
     ui = list[ft.FT]()
     for pkt in packets:
@@ -67,10 +67,23 @@ def gen_message_ui(packets: list[Packet], text_only: bool) -> list[ft.FT]:
         timestamp = Small(dt.strftime("%m-%d %H:%M:%S"), cls="bubble-date")
 
         if text_only:
+            reply_ui = list[ft.FT]()
+            if pkt.reply_id is not None:
+                reply_pkt = packet_store.fetch_mesh_id(pkt.reply_id)
+                if reply_pkt:
+                    reply_user = packet_store.fetch_nodeinfo(reply_pkt.packet["from"])
+                    assert isinstance(_rt := reply_pkt.payload, str)
+                    _rt = _rt if len(_rt) <= 30 else _rt[:30] + "..."
+                    reply_ui.append(
+                        Small(Code(f"↪ {reply_user['short_name']}: {_rt}", cls="reply"))
+                    )
+                else:
+                    reply_ui.append(Small(Code("↪ Message unavailable", cls="reply")))
+
             msg_ui = Div(
                 Div(Small(user["short_name"]), cls="msg-avatar"),
                 Div(
-                    Small(f"{user['long_name']}"),
+                    Div(Small(f"{user['long_name']}"), *reply_ui),
                     Article(
                         str(pkt.payload),
                         timestamp,
@@ -96,7 +109,7 @@ def gen_message_ui(packets: list[Packet], text_only: bool) -> list[ft.FT]:
     return ui[::-1]
 
 
-def gen_load_more_ui(text_only: bool) -> ft.FT:
+async def gen_load_more_ui(text_only: bool) -> ft.FT:
     return Div(
         P("Loading more...", aria_busy="true"),
         cls="load-more",
@@ -111,7 +124,7 @@ def gen_load_more_ui(text_only: bool) -> ft.FT:
 
 
 @app.get("/")
-def home() -> tuple[ft.FT, ...]:
+async def home() -> tuple[ft.FT, ...]:
     """Main page."""
     settings = mqtt_monitor.settings
     return (
@@ -143,8 +156,8 @@ def home() -> tuple[ft.FT, ...]:
             Div(
                 Div(
                     # Messages UI
-                    *gen_message_ui(packet_store.fetch_latest(True, 20), True),
-                    gen_load_more_ui(True),  # Load more
+                    *await gen_message_ui(packet_store.fetch_latest(True, 20), True),
+                    await gen_load_more_ui(True),  # Load more
                     id="messages",
                     cls="messages",
                     hx_get="/fetch-new-messages",  # fetch new message
@@ -155,8 +168,8 @@ def home() -> tuple[ft.FT, ...]:
                 ),
                 Div(
                     # Packets UI
-                    *gen_message_ui(packet_store.fetch_latest(False, 20), False),
-                    gen_load_more_ui(False),  # Load more
+                    *await gen_message_ui(packet_store.fetch_latest(False, 20), False),
+                    await gen_load_more_ui(False),  # Load more
                     id="packets",
                     cls="messages",
                     hx_get="/fetch-new-messages",  # fetch new message
@@ -218,7 +231,9 @@ async def new_message() -> EventSourceResponse:
 @app.get("/fetch-new-messages")
 async def fetch_new_messages(current_id: int, text_only: bool) -> list[ft.FT]:
     """Endpoint for fetching latest messages."""
-    return gen_message_ui(packet_store.fetch_new(current_id, text_only), text_only)
+    return await gen_message_ui(
+        packet_store.fetch_new(current_id, text_only), text_only
+    )
 
 
 @app.get("/fetch-old-messages")
@@ -229,7 +244,9 @@ async def fetch_old_messages(
     packets = packet_store.fetch_old(current_id, text_only, count)
     if not packets:
         return []
-    return gen_message_ui(packets, text_only) + [gen_load_more_ui(text_only)]
+    return await gen_message_ui(packets, text_only) + [
+        await gen_load_more_ui(text_only)
+    ]
 
 
 if __name__ == "__main__":

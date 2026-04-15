@@ -27,6 +27,7 @@ class Packet:
         self.pkt_id = pkt_id
         self.msg_id = msg_id if self.is_text else -1
         self.mesh_id: int = self.packet.get("id", -1)
+        self.reply_id: int | None = _decoded.get("reply_id")
 
         self.pkt_new_day = pkt_new_day
         self.msg_new_day = msg_new_day
@@ -192,6 +193,15 @@ class SQLiteStore:
                 (mesh_id,),
             ).fetchone()
         return bool(result[0])
+
+    def fetch_packet_mesh_id(self, mesh_id: int) -> Packet | None:
+        with self.con:
+            result: sqlite3.Row = self.con.execute(
+                "SELECT * FROM packets WHERE packet ->> '$.id' = ?", (mesh_id,)
+            ).fetchone()
+        if result is None:
+            return None
+        return Packet(**result)
 
     def insert_packet(self, packet: Packet) -> None:
         """Insert a packet to packets table."""
@@ -383,6 +393,9 @@ class PacketStore:
             return self.pkt_ring.fetch_old(current_id, count)
         except IndexError:
             return self.sql_store.fetch_old_packets(current_id, count)
+
+    def fetch_mesh_id(self, mesh_id: int) -> Packet | None:
+        return self.sql_store.fetch_packet_mesh_id(mesh_id)
 
     def wait(self, timeout: int | float | None = None, text_only: bool = False) -> bool:
         """Wait for new Packet."""

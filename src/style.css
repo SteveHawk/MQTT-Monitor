@@ -78,6 +78,13 @@ header {
                 margin-bottom: 0;
                 overflow: hidden;
             }
+
+            .reply {
+                margin-left: 0.5rem;
+                border-radius: 0.5rem;
+                padding-top: 0;
+                padding-bottom: 0;
+            }
         }
 
         .pkt-div {
