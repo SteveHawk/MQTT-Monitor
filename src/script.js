@@ -22,7 +22,7 @@ function msgCleanUp() {
     let buffer_size = 100;
     for (let i = 0; i < msgs.length; i++) {
         if (i + buffer_size > msgs.length - 1) return;  // oob
-        if (msgs[i + buffer_size].getBoundingClientRect().top < 0) {
+        if (msgs[i + buffer_size].getBoundingClientRect().top <= 0) {
             msgs[i].closest(".msg-div").remove();
         } else return;
     }
@@ -32,7 +32,7 @@ function pktCleanUp() {
     let buffer_size = 100;
     for (let i = 0; i < pkts.length; i++) {
         if (i + buffer_size > pkts.length - 1) return;  // oob
-        if (pkts[i + buffer_size].getBoundingClientRect().top < 0) {
+        if (pkts[i + buffer_size].getBoundingClientRect().top <= 0) {
             pkts[i].closest(".pkt-div").remove();
         } else return;
     }
