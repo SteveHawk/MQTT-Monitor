@@ -165,6 +165,7 @@ async def home() -> tuple[ft.FT, ...]:
                     hx_vals="js:{current_id: getLastMsgId(), text_only: true}",  # calculate current_id to avoid missing messages
                     hx_target="this",
                     hx_swap="afterbegin show:bottom",
+                    hx_on__after_swap="msgCleanUp()",
                 ),
                 Div(
                     # Packets UI
@@ -177,6 +178,7 @@ async def home() -> tuple[ft.FT, ...]:
                     hx_vals="js:{current_id: getLastPktId(), text_only: false}",  # calculate current_id to avoid missing messages
                     hx_target="this",
                     hx_swap="afterbegin show:bottom",
+                    hx_on__after_swap="pktCleanUp()",
                     hidden=True,
                 ),
                 cls="messages-outer",
