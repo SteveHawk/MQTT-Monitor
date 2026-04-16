@@ -19,6 +19,7 @@ from fasthtml.common import (
     Script,
     Small,
     Title,
+    Favicon,
 )
 from sse_starlette import EventSourceResponse, ServerSentEvent
 from starlette.applications import Starlette
@@ -48,6 +49,7 @@ app, rt = ft.fast_app(
         Script(src="https://unpkg.com/htmx-ext-sse@2.2.1/sse.js"),  # SSE extension
         Script(src="src/script.js"),
         Link(rel="stylesheet", href="src/style.css", type="text/css"),
+        Favicon("src/favicon.png", "src/favicon.png"),
     ),
 )
 
