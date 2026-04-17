@@ -1,6 +1,6 @@
-# Meshtastic MQTT Monitor
+# MQTT Monitor for Meshtastic
 
-A MQTT message monitor for Meshtastic.
+A MQTT message and packet monitor for Meshtastic.
 
 Mostly a simplified version of [pdxlocations/connect](https://github.com/pdxlocations/connect), read-only with a web interface.
 
