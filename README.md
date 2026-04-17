@@ -7,20 +7,40 @@ Mostly a simplified version of [pdxlocations/connect](https://github.com/pdxloca
 | ![screenshot-messages-tab](./assets/screenshot-messages-tab.webp) | ![screenshot-packets-tab](./assets/screenshot-packets-tab.webp) |
 | :----------------------------------------------------------: | :----------------------------------------------------------: |
 
-## Build and run with Docker
+## Usage
 
-With default config (official MQTT server `mqtt.meshtastic.org`, US default root topic `msh/US`):
+Run prebuilt docker image with default settings:
+
+(official MQTT server `mqtt.meshtastic.org`, US default root topic `msh/US`)
+
+```bash
+docker run -d --name mqtt-monitor -p 5001:5001 \
+           -v ./mqtt-monitor.db:/app/mqtt-monitor.db \
+           ghcr.io/stevehawk/mqtt-monitor:latest
+```
+
+Run prebuilt image with CN settings:
+
+(CN MQTT server `mqtt.mess.host`, CN default root topic `msh/CN`)
+
+```bash
+docker run -d --name mqtt-monitor -p 5001:5001 \
+           -v ./mqtt-monitor.db:/app/mqtt-monitor.db \
+           ghcr.io/stevehawk/mqtt-monitor:latest-cn
+```
+
+## Build locally
+
+With default settings:
 
 ```bash
 docker build -t mqtt-monitor:default --target default .
-docker run mqtt-monitor:default
 ```
 
-With CN config (CN MQTT server `mqtt.mess.host`, CN default root topic `msh/CN`)
+With CN settings:
 
 ```bash
 docker build -t mqtt-monitor:cn --target cn .
-docker run mqtt-monitor:cn
 ```
 
 ## Available configs via environment variables
