@@ -1,0 +1,55 @@
+name: Publish Docker image
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    uses: docker/github-builder/.github/workflows/build.yml@v1
+    permissions:
+      contents: read # to fetch the repository content
+      id-token: write # for signing attestation(s) with GitHub OIDC Token
+    with:
+      output: image
+      push: ${{ github.event_name != 'pull_request' }}
+      target: default
+      cache: true
+      cache-mode: max
+      cache-scope: ${{ runner.os }}-${{ runner.arch }}
+      meta-images: ghcr.io/${{ github.repository }}
+      meta-tags: |
+        type=semver,pattern={{version}}
+        type=semver,pattern={{major}}.{{minor}}
+        type=semver,pattern=v{{major}}
+    secrets:
+      registry-auths: |
+        - registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+  build-cn:
+    uses: docker/github-builder/.github/workflows/build.yml@v1
+    permissions:
+      contents: read # to fetch the repository content
+      id-token: write # for signing attestation(s) with GitHub OIDC Token
+    with:
+      output: image
+      push: ${{ github.event_name != 'pull_request' }}
+      target: cn
+      cache: true
+      cache-mode: max
+      cache-scope: ${{ runner.os }}-${{ runner.arch }}
+      meta-images: ghcr.io/${{ github.repository }}
+      meta-flavor: |
+        suffix=cn,onlatest=true
+      meta-tags: |
+        type=semver,pattern={{version}}
+        type=semver,pattern={{major}}.{{minor}}
+        type=semver,pattern=v{{major}}
+    secrets:
+      registry-auths: |
+        - registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
