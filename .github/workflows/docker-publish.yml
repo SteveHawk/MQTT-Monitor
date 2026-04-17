@@ -17,7 +17,7 @@ jobs:
       target: default
       cache: true
       cache-mode: max
-      cache-scope: ${{ runner.os }}-${{ runner.arch }}
+      cache-scope: buildkit
       meta-images: ghcr.io/${{ github.repository }}
       meta-tags: |
         type=semver,pattern={{version}}
@@ -40,7 +40,7 @@ jobs:
       target: cn
       cache: true
       cache-mode: max
-      cache-scope: ${{ runner.os }}-${{ runner.arch }}
+      cache-scope: buildkit
       meta-images: ghcr.io/${{ github.repository }}
       meta-flavor: |
         suffix=cn,onlatest=true
