@@ -18,7 +18,7 @@ jobs:
       target: default
       cache: true
       cache-mode: max
-      cache-scope: ${{ strategy.job-index }}
+      cache-scope: ${{ matrix.runner }}
       meta-images: ghcr.io/${{ github.repository }}
       meta-tags: |
         type=semver,pattern={{version}}
@@ -31,6 +31,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
   build-cn:
+    needs: build # run after previous job so we can use docker cache
     uses: docker/github-builder/.github/workflows/build.yml@v1
     permissions:
       contents: read # to fetch the repository content
@@ -42,7 +43,7 @@ jobs:
       target: cn
       cache: true
       cache-mode: max
-      cache-scope: ${{ strategy.job-index }}
+      cache-scope: ${{ matrix.runner }}
       meta-images: ghcr.io/${{ github.repository }}
       meta-flavor: |
         suffix=cn,onlatest=true
