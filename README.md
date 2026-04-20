@@ -29,7 +29,7 @@ docker run -d --name mqtt-monitor -p 5001:5001 \
            ghcr.io/stevehawk/mqtt-monitor:latest-cn
 ```
 
-Now you can view the web interface at <localhost:5001>.
+Now you can view the web interface at [localhost:5001](http://localhost:5001).
 
 ## Build locally
 
