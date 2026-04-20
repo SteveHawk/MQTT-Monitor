@@ -6,7 +6,7 @@ ENV UV_NO_DEV=1
 WORKDIR /app/
 RUN --mount=from=ghcr.io/astral-sh/uv:0.10,source=/uv,target=/bin/uv \
     uv sync --locked &&\
-    mkdir target && mv .venv target
+    mkdir -p target/data && mv .venv target
 
 COPY ./src/ /app/target/src/
 

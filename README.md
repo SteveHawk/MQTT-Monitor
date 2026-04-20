@@ -15,7 +15,7 @@ Run prebuilt docker image with default settings:
 
 ```bash
 docker run -d --name mqtt-monitor -p 5001:5001 \
-           -v ./mqtt-monitor.db:/app/mqtt-monitor.db \
+           -v ./mqtt-monitor-data/:/app/data/ \
            ghcr.io/stevehawk/mqtt-monitor:latest
 ```
 
@@ -25,7 +25,7 @@ Run prebuilt image with CN settings:
 
 ```bash
 docker run -d --name mqtt-monitor -p 5001:5001 \
-           -v ./mqtt-monitor.db:/app/mqtt-monitor.db \
+           -v ./mqtt-monitor-data/:/app/data/ \
            ghcr.io/stevehawk/mqtt-monitor:latest-cn
 ```
 
@@ -53,5 +53,6 @@ docker build -t mqtt-monitor:cn --target cn .
 | MQTT_MONITOR_ROOT_TOPIC        | msh/US (default image)<br />msh/CN (CN image)                |
 | MQTT_MONITOR_CHANNEL           | LongFast                                                     |
 | MQTT_MONITOR_KEY               | AQ==                                                         |
+| MQTT_MONITOR_DB_PATH           | data/mqtt-monitor.db                                         |
 | MQTT_MONITOR_PACKET_KEEP_COUNT | 5000                                                         |
 | MQTT_MONITOR_MESSAGE_KEEP_DAYS | 30                                                           |

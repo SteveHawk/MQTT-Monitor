@@ -135,7 +135,8 @@ class RingBuffer:
 
 
 class SQLiteStore:
-    def __init__(self, database: str = "mqtt-monitor.db") -> None:
+    def __init__(self, database: str) -> None:
+        self.database = database
         self.con = sqlite3.connect(database, autocommit=False)
         self.con.row_factory = sqlite3.Row
 
@@ -285,8 +286,8 @@ class SQLiteStore:
 
 
 class PacketStore:
-    def __init__(self) -> None:
-        self.sql_store = SQLiteStore()  # SQLite connection for the main thread
+    def __init__(self, db_path: str) -> None:
+        self.sql_store = SQLiteStore(db_path)  # SQLite connection for the main thread
         self.sql_store.init_tables()  # Only run init in main thread
         self.sql_store_t = dict[int, SQLiteStore]()  # SQLite conn for different threads
 
@@ -311,7 +312,7 @@ class PacketStore:
         """Initialize a new SQLite connection for current thread."""
         if (ident := threading.get_ident()) in self.sql_store_t:
             return
-        self.sql_store_t[ident] = SQLiteStore()
+        self.sql_store_t[ident] = SQLiteStore(self.sql_store.database)
 
     def thread_close(self) -> None:
         """Close the SQLite connection for current thread."""

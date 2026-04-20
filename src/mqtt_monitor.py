@@ -25,6 +25,7 @@ class Settings(BaseSettings):
         str, AfterValidator(lambda k: "1PG7OiApB1nwvP+rz05pAQ==" if k == "AQ==" else k)
     ] = "AQ=="
 
+    db_path: str = "data/mqtt-monitor.db"
     packet_keep_count: int = 5000
     message_keep_days: int = 30
 
@@ -81,7 +82,7 @@ class MQTTMonitor:
         )
         self.mqttc.loop_start()
 
-        self.packet_store = PacketStore()
+        self.packet_store = PacketStore(self.settings.db_path)
         with contextlib.closing(self.packet_store):
             cleanup_thread = threading.Thread(target=self.packets_cleanup_service)
             cleanup_thread.start()
