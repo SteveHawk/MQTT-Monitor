@@ -1,6 +1,6 @@
 # MQTT Monitor for Meshtastic
 
-A MQTT message and packet monitor for Meshtastic.
+A MQTT message and packet monitor for Meshtastic. Directly connect to MQTT server, no radio hardware required.
 
 Mostly a simplified version of [pdxlocations/connect](https://github.com/pdxlocations/connect), read-only with a web interface.
 
