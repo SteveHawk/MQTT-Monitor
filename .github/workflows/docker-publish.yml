@@ -36,10 +36,10 @@ jobs:
     with:
       output: image
       push: ${{ github.event_name != 'pull_request' }}
-      target: cn
+      target: -cn
       meta-images: ghcr.io/${{ github.repository }}
       meta-flavor: |
-        suffix=cn,onlatest=true
+        suffix=-cn,onlatest=true
       meta-tags: |
         type=semver,pattern={{version}}
         type=semver,pattern={{major}}.{{minor}}
