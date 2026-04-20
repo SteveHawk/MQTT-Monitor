@@ -19,7 +19,7 @@ docker run -d --name mqtt-monitor -p 5001:5001 \
            ghcr.io/stevehawk/mqtt-monitor:latest
 ```
 
-Run prebuilt image with CN settings:
+Or run prebuilt image with CN settings:
 
 (CN MQTT server `mqtt.mess.host`, CN default root topic `msh/CN`)
 
@@ -28,6 +28,8 @@ docker run -d --name mqtt-monitor -p 5001:5001 \
            -v ./mqtt-monitor-data/:/app/data/ \
            ghcr.io/stevehawk/mqtt-monitor:latest-cn
 ```
+
+Now you can view the web interface at <localhost:5001>.
 
 ## Build locally
 
@@ -47,6 +49,7 @@ docker build -t mqtt-monitor:cn --target cn .
 
 | name                           | default value                                                |
 | ------------------------------ | ------------------------------------------------------------ |
+| PORT                           | 5001                                                         |
 | MQTT_MONITOR_ADDRESS           | mqtt.meshtastic.org (default image)<br />mqtt.mess.host (CN image) |
 | MQTT_MONITOR_USERNAME          | meshdev                                                      |
 | MQTT_MONITOR_PASSWORD          | large4cats                                                   |
